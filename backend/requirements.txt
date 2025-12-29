@@ -8,4 +8,4 @@ langchain-community
 langchain-huggingface
 faiss-cpu
 langchain-groq
-sentence-transformers
+fastembed
