@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "C:\\Users\\Tushar\\AppData\\Roaming\\Python\\Python311\\site-packages"
+    ],
+    "python.defaultInterpreterPath": "C:\\Users\\Tushar\\AppData\\Roaming\\Python\\Python311\\python.exe"
+}

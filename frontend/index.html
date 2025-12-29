@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuChat AI | Professional</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+</head>
+<body>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 id="modalTitle">Confirm Action</h3>
+            <p id="modalMessage">Are you sure?</p>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-danger" id="modalConfirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <svg width="28" height="28" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" class="brand-logo">
+                        <circle cx="50" cy="50" r="40" />
+                        <circle cx="50" cy="50" r="20" />
+                    </svg>
+                    <span class="brand-text">DocuChat</span>
+                </div>
+                <button class="icon-btn" onclick="toggleSidebar()" title="Collapse Sidebar">
+                    <i class="ri-side-bar-line"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-content">
+                <button class="btn-new-chat" onclick="createNewSession()">
+                    <i class="ri-add-line"></i> New Chat
+                </button>
+
+                <div class="section-group">
+                    <div class="section-header">
+                        <span><i class="ri-file-text-line"></i> Knowledge Base</span>
+                        <span class="badge" id="fileCount">0</span>
+                    </div>
+                    
+                    <div class="mini-upload" onclick="document.getElementById('fileInput').click()">
+                        <i class="ri-upload-cloud-2-line"></i> Upload PDF/DOCX
+                    </div>
+
+                    <div id="fileList" class="file-list"></div>
+                </div>
+
+                <div class="section-group">
+                    <div class="section-header">
+                        <span><i class="ri-history-line"></i> History</span>
+                        <button class="icon-btn-small text-danger" onclick="confirmClearAll()" title="Clear All Data">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </div>
+                    <div id="sessionList" class="session-list"></div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="themeToggle">
+                    <i class="ri-moon-line" id="themeIcon"></i>
+                    <span id="themeText">Dark Mode</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-bar">
+                <div class="header-left">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="ri-menu-line"></i>
+                    </button>
+                    <button class="sidebar-expand-btn hidden" id="expandBtn" onclick="toggleSidebar()">
+                        <i class="ri-layout-column-line"></i>
+                    </button>
+                    <div class="chat-info">
+                        <h2 id="chatTitle">New Conversation</h2>
+                        <span class="status-badge ready">
+                            <span class="status-dot"></span> Ready
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <div id="chatContainer" class="chat-scroll-area">
+                <div id="emptyState" class="empty-state">
+                    <div class="hero-logo-wrapper">
+                        <svg width="100" height="100" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" class="hero-logo">
+                            <circle cx="50" cy="50" r="45" opacity="0.3"/>
+                            <circle cx="50" cy="50" r="25" />
+                            <path d="M50 10 L50 25" />
+                            <path d="M50 75 L50 90" />
+                            <path d="M10 50 L25 50" />
+                            <path d="M75 50 L90 50" />
+                        </svg>
+                    </div>
+                    
+                    <h1>How can I help with your documents?</h1>
+                    <p style="margin-bottom: 30px; opacity: 0.7;">Upload PDF or DOCX files. I remember context and previous questions.</p>
+                    
+                    <div class="upload-hero" id="heroDropZone">
+                        <div class="upload-content">
+                            <i class="ri-upload-cloud-2-fill upload-hero-icon"></i>
+                            <h3>Upload Documents</h3>
+                            <p>Drag & drop PDF or DOCX here</p>
+                        </div>
+                        <input type="file" id="fileInput" hidden multiple accept=".pdf,.docx">
+                    </div>
+
+                    <div class="features-grid">
+                        <div class="feature-item">
+                            <i class="ri-chat-history-line"></i>
+                            <span>Context Memory</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="ri-file-copy-2-line"></i>
+                            <span>Multi-File</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="ri-brain-line"></i>
+                            <span>Smart AI</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="messagesList" class="messages-list"></div>
+            </div>
+
+            <div class="input-section">
+                <div class="input-container">
+                    <textarea 
+                        id="userInput" 
+                        placeholder="Ask about your documents (e.g. 'Summarize it' or 'Explain feature X')..." 
+                        rows="1"
+                        oninput="autoResize(this)"
+                        onkeydown="handleEnter(event)"
+                    ></textarea>
+                    <button id="sendBtn" class="send-btn" onclick="sendMessage()">
+                        <i class="ri-send-plane-fill"></i>
+                    </button>
+                </div>
+                <div class="footer-note">
+                    AI can make mistakes. Verify important information.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
