@@ -13,9 +13,10 @@ from dotenv import load_dotenv
 import docx
 
 # --- ROBUST IMPORT SECTION ---
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
