@@ -9,3 +9,5 @@ langchain-groq
 faiss-cpu
 fastembed
 python-multipart
+langchain
+PyPDF2
