@@ -5,7 +5,7 @@ pypdf
 python-docx
 langchain-text-splitters
 langchain-community
-langchain-huggingface
-faiss-cpu
 langchain-groq
+faiss-cpu
 fastembed
+python-multipart
