@@ -1,360 +1,530 @@
-const API_URL = 'http://localhost:8000';
-let currentSessionId = null;
+// CHANGE THIS TO YOUR RENDER URL AFTER DEPLOYMENT
+const API = 'http://localhost:8000';
 
-// --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialize Theme from Storage
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
+let sessionId = null;
+let theme = 'light';
 
-    // 2. Load Data
-    checkStatus();
-    loadSessions();
-    loadFiles();
-    setupEventListeners();
-});
+// ========== SESSION MANAGEMENT ==========
 
-// --- Theme Logic ---
-function updateThemeIcon(theme) {
-    const icon = document.getElementById('themeIcon');
-    const text = document.getElementById('themeText');
-    if (theme === 'dark') {
-        icon.className = 'ri-moon-line';
-        text.innerText = 'Dark Mode';
-    } else {
-        icon.className = 'ri-sun-line';
-        text.innerText = 'Light Mode';
-    }
-}
-
-// --- Event Listeners ---
-function setupEventListeners() {
-    // Theme Toggle
-    document.getElementById('themeToggle').addEventListener('click', () => {
-        const current = document.documentElement.getAttribute('data-theme');
-        const next = current === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('theme', next); 
-        updateThemeIcon(next);
-    });
-
-    // File Upload
-    const heroDrop = document.getElementById('heroDropZone');
-    const fileInput = document.getElementById('fileInput');
-
-    if (heroDrop) {
-        heroDrop.addEventListener('click', () => fileInput.click());
-        heroDrop.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            heroDrop.classList.add('dragover');
-        });
-        heroDrop.addEventListener('dragleave', () => heroDrop.classList.remove('dragover'));
-        heroDrop.addEventListener('drop', (e) => {
-            e.preventDefault();
-            heroDrop.classList.remove('dragover');
-            validateAndUpload(e.dataTransfer.files);
-        });
-    }
-
-    fileInput.addEventListener('change', (e) => validateAndUpload(e.target.files));
-}
-
-// --- UI Helpers ---
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    let icon = 'ri-information-line';
-    if(type === 'success') icon = 'ri-checkbox-circle-line';
-    if(type === 'error') icon = 'ri-error-warning-line';
-    toast.innerHTML = `<i class="${icon}"></i> <span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-let confirmCallback = null;
-function showConfirmModal(title, message, callback) {
-    document.getElementById('modalTitle').innerText = title;
-    document.getElementById('modalMessage').innerText = message;
-    document.getElementById('modalOverlay').classList.remove('hidden');
-    confirmCallback = callback;
-}
-function closeModal() {
-    document.getElementById('modalOverlay').classList.add('hidden');
-    confirmCallback = null;
-}
-document.getElementById('modalConfirmBtn').addEventListener('click', () => {
-    if (confirmCallback) confirmCallback();
-    closeModal();
-});
-
-// --- Sidebar Logic ---
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const expandBtn = document.getElementById('expandBtn');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.toggle('active');
-    } else {
-        sidebar.classList.toggle('collapsed');
-        if (sidebar.classList.contains('collapsed')) {
-            expandBtn.classList.remove('hidden');
-        } else {
-            expandBtn.classList.add('hidden');
-        }
-    }
-}
-
-function autoResize(textarea) {
-    textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
-}
-
-// --- Backend Logic ---
-async function checkStatus() {
+// Load session from localStorage
+function loadSavedSession() {
     try {
-        const res = await fetch(`${API_URL}/status`);
-        const data = await res.json();
-        if (data.current_session) {
-            loadSession(data.current_session);
+        const saved = localStorage.getItem('docuchat_session');
+        if (saved) {
+            sessionId = saved;
+            console.log('Loaded session from localStorage:', sessionId);
         }
     } catch (e) {
-        showToast("Backend disconnected", "error");
+        console.log('No saved session found');
     }
 }
 
-async function validateAndUpload(files) {
+// Save session to localStorage
+function saveSessionToStorage() {
+    if (sessionId) {
+        localStorage.setItem('docuchat_session', sessionId);
+    }
+}
+
+// Clear saved session
+function clearSavedSession() {
+    localStorage.removeItem('docuchat_session');
+}
+
+// Update UI to show active session
+function updateSessionIndicator() {
+    const badge = document.getElementById('badge');
+    if (sessionId) {
+        badge.textContent = 'In Chat';
+        badge.classList.add('active');
+    } else {
+        badge.textContent = 'Ready';
+        badge.classList.remove('active');
+    }
+}
+
+// ========== INIT ==========
+window.onload = () => {
+    loadSavedSession();
+    loadFiles();
+    loadHistory();
+    setupUpload();
+    updateSessionIndicator();
+};
+
+// ========== THEME ==========
+function toggleTheme() {
+    theme = theme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️';
+}
+
+// ========== UPLOAD ==========
+function setupUpload() {
+    const box = document.getElementById('uploadBox');
+    const input = document.getElementById('fileInput');
+    
+    box.onclick = () => input.click();
+    
+    box.ondragover = (e) => {
+        e.preventDefault();
+        box.style.borderColor = 'var(--primary)';
+    };
+    
+    box.ondragleave = () => {
+        box.style.borderColor = '';
+    };
+    
+    box.ondrop = (e) => {
+        e.preventDefault();
+        box.style.borderColor = '';
+        upload(e.dataTransfer.files);
+    };
+    
+    input.onchange = (e) => upload(e.target.files);
+}
+
+async function upload(files) {
     if (!files.length) return;
+    
+    toast('Uploading...', 'info');
+    let ok = 0;
+    
+    // CRITICAL: Save current session state
+    const originalSessionId = sessionId;
+    console.log('Upload starting. Current session:', originalSessionId);
+    
     for (let file of files) {
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!['pdf', 'docx'].includes(ext)) {
-            showToast(`Skipped ${file.name}: Only PDF/DOCX allowed.`, 'error');
-            continue;
-        }
-        const formData = new FormData();
-        formData.append('file', file);
+        if (!file.name.match(/\.(pdf|docx|doc)$/i)) continue;
+        
+        const form = new FormData();
+        form.append('file', file);
+        
         try {
-            showToast(`Uploading ${file.name}...`, 'info');
-            const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
-            const data = await res.json();
+            const res = await fetch(`${API}/upload`, {
+                method: 'POST',
+                body: form
+            });
+            
             if (res.ok) {
-                showToast(`${file.name} uploaded!`, 'success');
-                loadFiles();
-            } else {
-                showToast(`Failed: ${data.detail || 'Unknown error'}`, 'error');
+                const data = await res.json();
+                console.log('Upload response:', data);
+                ok++;
             }
-        } catch (err) {
-            showToast(`Network error uploading ${file.name}`, 'error');
+        } catch (e) {
+            console.error('Upload error:', e);
         }
+    }
+    
+    document.getElementById('fileInput').value = '';
+    
+    if (ok > 0) {
+        toast(`${ok} file(s) uploaded`, 'success');
+        loadFiles();
+        
+        // CRITICAL: Restore original session - DO NOT create new chat
+        if (originalSessionId) {
+            sessionId = originalSessionId;
+            saveSessionToStorage();
+            updateSessionIndicator();
+            console.log('Restored original session after upload:', sessionId);
+            
+            // If we have an active chat, make sure it's still visible
+            const chat = document.getElementById('chat');
+            const hasMessages = chat.querySelectorAll('.msg').length > 0;
+            
+            if (!hasMessages && originalSessionId) {
+                // Try to load the session messages if chat is empty
+                loadSession(originalSessionId);
+            }
+        }
+    } else {
+        toast('No files were uploaded', 'error');
     }
 }
 
+// ========== FILES ==========
 async function loadFiles() {
     try {
-        const res = await fetch(`${API_URL}/files`);
+        const res = await fetch(`${API}/files`);
         const data = await res.json();
+        
         const list = document.getElementById('fileList');
         const count = document.getElementById('fileCount');
-        list.innerHTML = '';
-        count.innerText = data.files ? data.files.length : 0;
-        if (data.files) {
-            data.files.forEach(file => {
+        const clearBtn = document.getElementById('clearBtn');
+        const badge = document.getElementById('badge');
+        
+        count.textContent = data.files.length;
+        
+        if (data.files.length > 0) {
+            list.innerHTML = '';
+            data.files.forEach(f => {
                 const div = document.createElement('div');
-                div.className = 'file-item';
+                div.className = 'item';
                 div.innerHTML = `
-                    <i class="ri-file-pdf-line"></i>
-                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${file.filename}</span>
-                    <i class="ri-close-line text-danger" onclick="deleteFile('${file.file_id}')"></i>
+                    <span class="item-text">${f.filename.endsWith('.pdf') ? '📄' : '📝'} ${f.filename}</span>
+                    <span class="item-del" onclick="delFile('${f.fid}')">×</span>
                 `;
                 list.appendChild(div);
             });
-        }
-    } catch (e) { console.error("Error loading files"); }
-}
-
-async function deleteFile(fileId) {
-    showConfirmModal("Delete File", "Remove this file from knowledge base?", async () => {
-        await fetch(`${API_URL}/files/${fileId}`, { method: 'DELETE' });
-        showToast("File deleted", "success");
-        loadFiles();
-    });
-}
-
-// --- Chat & Session Logic ---
-
-async function createNewSession() {
-    const res = await fetch(`${API_URL}/sessions/new`, { method: 'POST' });
-    const data = await res.json();
-    currentSessionId = data.session_id;
-    
-    document.getElementById('messagesList').innerHTML = '';
-    document.getElementById('emptyState').classList.remove('hidden');
-    document.getElementById('chatTitle').innerText = "New Conversation";
-    
-    loadSessions();
-}
-
-async function deleteSession(sessionId) {
-    showConfirmModal("Delete Chat", "Delete this conversation?", async () => {
-        try {
-            const res = await fetch(`${API_URL}/sessions/${sessionId}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast("Chat deleted", "success");
-                if (currentSessionId === sessionId) {
-                    createNewSession();
-                } else {
-                    loadSessions();
-                }
-            }
-        } catch (e) { showToast("Error deleting session", "error"); }
-    });
-}
-
-async function loadSessions() {
-    try {
-        const res = await fetch(`${API_URL}/sessions`);
-        const data = await res.json();
-        const list = document.getElementById('sessionList');
-        list.innerHTML = '';
-        data.sessions.forEach(session => {
-            const div = document.createElement('div');
-            div.className = `session-item ${session.id === currentSessionId ? 'active' : ''}`;
-            div.innerHTML = `
-                <i class="ri-message-3-line"></i>
-                <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${session.title}</span>
-            `;
-            const delBtn = document.createElement('i');
-            delBtn.className = 'ri-delete-bin-line text-danger';
-            delBtn.style.marginLeft = 'auto';
-            delBtn.style.opacity = '0.6';
-            delBtn.style.fontSize = '0.9em';
-            delBtn.onclick = (e) => {
-                e.stopPropagation();
-                deleteSession(session.id);
-            };
-            div.appendChild(delBtn);
-            div.onclick = () => loadSession(session.id);
-            list.appendChild(div);
-        });
-    } catch (e) { console.error("Error loading sessions"); }
-}
-
-async function loadSession(sessionId) {
-    currentSessionId = sessionId;
-    const res = await fetch(`${API_URL}/sessions/${sessionId}`);
-    if (!res.ok) {
-        createNewSession();
-        return;
-    }
-    const data = await res.json();
-    document.getElementById('chatTitle').innerText = data.title;
-    document.getElementById('emptyState').classList.add('hidden');
-    const container = document.getElementById('messagesList');
-    container.innerHTML = '';
-    if (data.messages) {
-        data.messages.forEach(msg => {
-            appendMessage(msg.role === 'assistant' ? 'ai' : 'user', msg.content, msg.sources);
-        });
-    }
-    loadSessions();
-}
-
-function handleEnter(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-}
-
-async function sendMessage() {
-    const input = document.getElementById('userInput');
-    const text = input.value.trim();
-    if (!text) return;
-
-    if (!currentSessionId) await createNewSession();
-
-    document.getElementById('emptyState').classList.add('hidden');
-    appendMessage('user', text);
-    input.value = '';
-    input.style.height = 'auto';
-
-    const loadingId = 'loading-' + Date.now();
-    const container = document.getElementById('messagesList');
-    const loadDiv = document.createElement('div');
-    loadDiv.className = 'message ai';
-    loadDiv.id = loadingId;
-    loadDiv.innerHTML = `
-        <div class="message-avatar"><i class="ri-robot-2-line"></i></div>
-        <div class="message-content">
-            <div class="typing-indicator">Thinking...</div>
-        </div>
-    `;
-    container.appendChild(loadDiv);
-    container.parentElement.scrollTop = container.parentElement.scrollHeight;
-
-    try {
-        const res = await fetch(`${API_URL}/ask`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: text, session_id: currentSessionId })
-        });
-        
-        const data = await res.json();
-        document.getElementById(loadingId).remove();
-        
-        if (res.ok) {
-            // FIX: Ensure we stay on the same session ID returned by backend
-            if (data.session_id && data.session_id !== currentSessionId) {
-                currentSessionId = data.session_id;
-            }
-            appendMessage('ai', data.answer, data.sources);
-            loadSessions();
+            clearBtn.style.display = 'block';
+            badge.textContent = `${data.files.length} docs`;
+            badge.classList.add('active');
         } else {
-            showToast(data.detail || "Error getting answer", "error");
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:0.9em">No files</div>';
+            clearBtn.style.display = 'none';
+            badge.textContent = 'Ready';
+            badge.classList.remove('active');
         }
     } catch (e) {
-        document.getElementById(loadingId).remove();
-        showToast("Connection failed", "error");
+        console.error('Load files error:', e);
+        toast('Backend offline', 'error');
     }
 }
 
-function appendMessage(role, text, sources = []) {
-    const container = document.getElementById('messagesList');
+async function delFile(fid) {
+    if (!confirm('Delete this file?')) return;
+    
+    try {
+        await fetch(`${API}/files/${fid}`, { method: 'DELETE' });
+        toast('File deleted', 'success');
+        loadFiles();
+    } catch (e) {
+        console.error('Delete error:', e);
+        toast('Error deleting file', 'error');
+    }
+}
+
+async function clearAll() {
+    if (!confirm('Clear all files?')) return;
+    
+    try {
+        await fetch(`${API}/clear`, { method: 'DELETE' });
+        toast('All files cleared', 'success');
+        loadFiles();
+    } catch (e) {
+        console.error('Clear error:', e);
+        toast('Error clearing files', 'error');
+    }
+}
+
+// ========== HISTORY ==========
+async function loadHistory() {
+    try {
+        const res = await fetch(`${API}/sessions`);
+        const data = await res.json();
+        
+        const list = document.getElementById('historyList');
+        
+        if (data.sessions && data.sessions.length > 0) {
+            list.innerHTML = '';
+            data.sessions.forEach(s => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                if (s.id === sessionId) div.classList.add('active');
+                div.innerHTML = `
+                    <span class="item-text" onclick="loadSession('${s.id}')">${s.title}</span>
+                    <span class="item-del" onclick="delSession('${s.id}', event)">×</span>
+                `;
+                list.appendChild(div);
+            });
+        } else {
+            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:0.9em">No history</div>';
+        }
+    } catch (e) {
+        console.error('Load history error:', e);
+    }
+}
+
+async function loadSession(sid) {
+    try {
+        const res = await fetch(`${API}/sessions/${sid}`);
+        if (!res.ok) throw new Error('Session not found');
+        
+        const data = await res.json();
+        
+        // Update session
+        sessionId = sid;
+        saveSessionToStorage();
+        updateSessionIndicator();
+        
+        console.log('Loaded session:', sessionId);
+        
+        // Clear and load messages
+        const chat = document.getElementById('chat');
+        chat.innerHTML = '';
+        
+        if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(m => {
+                if (m.role === 'user') {
+                    addMsg(m.content, 'user', false);
+                } else {
+                    addMsg(m.content, 'ai', false, m.sources);
+                }
+            });
+        } else {
+            chat.innerHTML = `
+                <div class="empty">
+                    <h2>Chat Loaded</h2>
+                    <p>No messages yet. Start asking questions!</p>
+                </div>
+            `;
+        }
+        
+        // Scroll to bottom
+        chat.scrollTop = chat.scrollHeight;
+        
+        loadHistory();
+    } catch (e) {
+        console.error('Load session error:', e);
+        toast('Error loading chat', 'error');
+    }
+}
+
+async function newChat() {
+    try {
+        const res = await fetch(`${API}/sessions/new`, { method: 'POST' });
+        const data = await res.json();
+        
+        // Update session
+        sessionId = data.session_id;
+        saveSessionToStorage();
+        updateSessionIndicator();
+        
+        console.log('New chat created with session:', sessionId);
+        
+        // Clear current chat display
+        const chat = document.getElementById('chat');
+        chat.innerHTML = `
+            <div class="empty">
+                <h2>New Chat Started</h2>
+                <p>Ask me anything about your documents</p>
+            </div>
+        `;
+        
+        loadHistory();
+        toast('New chat created', 'success');
+    } catch (e) {
+        console.error('New chat error:', e);
+        toast('Error creating chat', 'error');
+    }
+}
+
+async function delSession(sid, e) {
+    e.stopPropagation();
+    if (!confirm('Delete this chat?')) return;
+    
+    try {
+        await fetch(`${API}/sessions/${sid}`, { method: 'DELETE' });
+        
+        if (sessionId === sid) {
+            sessionId = null;
+            clearSavedSession();
+            updateSessionIndicator();
+            
+            const chat = document.getElementById('chat');
+            chat.innerHTML = `
+                <div class="empty">
+                    <h2>Welcome to DocuChat AI</h2>
+                    <p>Upload documents and ask questions</p>
+                </div>
+            `;
+        }
+        
+        toast('Chat deleted', 'success');
+        loadHistory();
+    } catch (e) {
+        console.error('Delete session error:', e);
+        toast('Error deleting chat', 'error');
+    }
+}
+
+// ========== CHAT ==========
+async function send() {
+    const input = document.getElementById('input');
+    const q = input.value.trim();
+    
+    if (!q) return;
+    
+    const chat = document.getElementById('chat');
+    const empty = chat.querySelector('.empty');
+    if (empty) empty.remove();
+    
+    addMsg(q, 'user', true);
+    input.value = '';
+    
+    const tid = addTyping();
+    
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    
+    try {
+        console.log('Sending question:', q, 'Session:', sessionId);
+        
+        const requestBody = {
+            question: q
+        };
+        
+        if (sessionId) {
+            requestBody.session_id = sessionId;
+        }
+        
+        const res = await fetch(`${API}/ask`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!res.ok) {
+            let errorMsg = 'Request failed';
+            try {
+                const errorData = await res.json();
+                errorMsg = errorData.detail || errorData.message || `Server error: ${res.status}`;
+            } catch (parseError) {
+                errorMsg = `Server error: ${res.status}`;
+            }
+            throw new Error(errorMsg);
+        }
+        
+        const data = await res.json();
+        console.log('API Response - Session ID:', data.session_id);
+        
+        removeTyping(tid);
+        
+        // Update sessionId from response
+        if (data.session_id) {
+            sessionId = data.session_id;
+            saveSessionToStorage();
+            updateSessionIndicator();
+            console.log('Updated sessionId to:', sessionId);
+        }
+        
+        addMsg(data.answer, 'ai', true, data.sources);
+        loadHistory();
+        
+    } catch (e) {
+        removeTyping(tid);
+        console.error('Send error:', e);
+        toast(e.message || 'Connection error', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function addMsg(text, type, scroll, sources) {
+    const chat = document.getElementById('chat');
     const div = document.createElement('div');
-    div.className = `message ${role}`;
+    div.className = `msg ${type}`;
     
-    const htmlContent = marked.parse(text);
+    const avatar = document.createElement('div');
+    avatar.className = `avatar ${type}`;
+    avatar.textContent = type === 'ai' ? '🤖' : '👤';
     
-    let sourceHtml = '';
-    if (sources && sources.length) {
-        sourceHtml = `<div class="message-sources" style="margin-top:10px; font-size:0.8em; opacity:0.7; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px;">
-            <i class="ri-book-open-line"></i> Sources: ${sources.join(', ')}
-        </div>`;
+    const content = document.createElement('div');
+    content.className = 'msg-content';
+    
+    if (type === 'ai') {
+        content.innerHTML = formatAI(text);
+        
+        if (sources && sources.length) {
+            const srcDiv = document.createElement('div');
+            srcDiv.style.marginTop = '8px';
+            sources.forEach(s => {
+                const tag = document.createElement('span');
+                tag.className = 'source';
+                tag.textContent = `📄 ${s}`;
+                srcDiv.appendChild(tag);
+            });
+            content.appendChild(srcDiv);
+        }
+    } else {
+        content.textContent = text;
     }
-
-    const icon = role === 'ai' ? 'ri-robot-2-line' : 'ri-user-smile-line';
     
-    div.innerHTML = `
-        <div class="message-avatar"><i class="${icon}"></i></div>
-        <div class="message-content">
-            ${htmlContent}
-            ${sourceHtml}
-        </div>
-    `;
+    div.appendChild(avatar);
+    div.appendChild(content);
+    chat.appendChild(div);
     
-    container.appendChild(div);
-    const scrollArea = document.getElementById('chatContainer');
-    scrollArea.scrollTop = scrollArea.scrollHeight;
+    if (scroll) {
+        chat.scrollTop = chat.scrollHeight;
+    }
 }
 
-function confirmClearAll() {
-    showConfirmModal("Clear All Data", "Are you sure? This deletes ALL uploaded files AND chat history.", async () => {
-        await fetch(`${API_URL}/clear`, { method: 'DELETE' });
-        showToast("System reset complete", "success");
-        setTimeout(() => location.reload(), 1000);
+function formatAI(text) {
+    let paras = text.split('\n\n');
+    let html = '';
+    
+    paras.forEach(p => {
+        p = p.trim();
+        if (!p) return;
+        
+        if (p.includes('\n- ')) {
+            const items = p.split('\n- ').filter(x => x.trim());
+            html += '<ul>';
+            items.forEach(i => {
+                if (i.trim()) html += `<li>${i.trim()}</li>`;
+            });
+            html += '</ul>';
+        } else if (/^\d+\./.test(p)) {
+            const items = p.split(/\n\d+\.\s+/).filter(x => x.trim());
+            html += '<ol>';
+            items.forEach(i => {
+                if (i.trim()) html += `<li>${i.trim()}</li>`;
+            });
+            html += '</ol>';
+        } else {
+            html += `<p>${p}</p>`;
+        }
     });
+    
+    return html || `<p>${text}</p>`;
+}
+
+function addTyping() {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    const id = 't' + Date.now();
+    div.id = id;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar ai';
+    avatar.textContent = '🤖';
+    
+    const typing = document.createElement('div');
+    typing.className = 'typing';
+    typing.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    
+    div.appendChild(avatar);
+    div.appendChild(typing);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    
+    return id;
+}
+
+function removeTyping(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+// ========== TOAST ==========
+function toast(msg, type) {
+    const t = document.getElementById('toast');
+    const message = typeof msg === 'string' ? msg : JSON.stringify(msg);
+    t.textContent = message;
+    t.className = type;
+    t.style.display = 'block';
+    
+    setTimeout(() => {
+        t.style.display = 'none';
+    }, 3000);
+}
+
+// ========== SIDEBAR ==========
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
 }
