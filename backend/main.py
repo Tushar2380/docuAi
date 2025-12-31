@@ -12,8 +12,9 @@ import docx
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
+
 # ---------------------------------------------------------
-# ✅ UPGRADE: Switch to FastEmbed (Lightweight & Error-Free)
+# ✅ CHANGED: Switched to FastEmbed (Lightweight for Render)
 # ---------------------------------------------------------
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
@@ -61,11 +62,10 @@ if GROQ_API_KEY:
         print(f"❌ Error initializing LLM: {e}")
 
 # ---------------------------------------------------------
-# ✅ FIX: Load Lightweight Embeddings (Fixes Render Error)
+# ✅ CHANGED: Initialize FastEmbed (No sentence_transformers needed)
 # ---------------------------------------------------------
 print("🔄 Loading embeddings model...")
 try:
-    # This uses much less RAM and doesn't need sentence_transformers
     embeddings = FastEmbedEmbeddings()
     print("✅ Embeddings loaded successfully!")
 except Exception as e:
