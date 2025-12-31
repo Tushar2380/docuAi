@@ -1,5 +1,5 @@
 // CHANGE THIS TO YOUR RENDER URL AFTER DEPLOYMENT
-const API = 'http://localhost:8000';
+const API = 'https://docuchatai.onrender.com';
 
 let sessionId = null;
 let theme = 'light';
