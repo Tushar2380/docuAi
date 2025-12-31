@@ -1,5 +1,5 @@
 // CHANGE THIS TO YOUR RENDER URL AFTER DEPLOYMENT
-const API = 'https://docuchatai.onrender.com';
+const API = 'https://docuchat-ai-bgjh.onrender.com';
 
 let sessionId = null;
 let theme = 'light';
