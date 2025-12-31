@@ -316,8 +316,13 @@ async def ask_question(request: QuestionRequest):
                 role = "User" if msg["role"] == "user" else "Assistant"
                 history += f"{role}: {msg['content']}\n"
         
-        # Create prompt
-        prompt = f"""You are a helpful AI assistant. Answer the question based on the provided context.
+        # Create prompt - SMARTER VERSION
+        prompt = f"""You are an intelligent AI assistant. 
+
+Instructions:
+1. If the user asks for a SUMMARY, identify the main TOPICS and CONCEPTS in the documents. Do not just list the questions found in the text.
+2. If the user asks a specific question, answer it strictly based on the provided Context.
+3. If the answer is not in the context, say "I cannot find that information in the documents."
 
 Context from documents:
 {context}
@@ -326,8 +331,6 @@ Conversation history:
 {history}
 
 User question: {request.question}
-
-Provide a clear, well-formatted answer. At the end, mention the source document(s).
 
 Answer:"""
         
