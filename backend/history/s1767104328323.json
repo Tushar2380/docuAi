@@ -1,0 +1,35 @@
+{
+  "id": "s1767104328323",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Create imp questions from these assignment",
+      "timestamp": "2025-12-30 19:48:49"
+    },
+    {
+      "role": "assistant",
+      "content": "1,000 years old, is a testament \nto India's rich cultural heritage \nand engineering prowess.\nQutub Minar, \nDelhi, India\nThe Indian subcontinent has \nexperienced numerous historical \nempires, each leaving its own \nunique mark.",
+      "sources": [
+        "Assignment 3 .pdf",
+        "Assignment 1.pdf"
+      ],
+      "timestamp": "2025-12-30 19:48:49"
+    },
+    {
+      "role": "user",
+      "content": "Create list of important questions from these pdfs",
+      "timestamp": "2025-12-30 19:49:27"
+    },
+    {
+      "role": "assistant",
+      "content": "**Important Questions from the Provided Context**\n\n1. **What were some of the advanced irrigation systems and technologies developed in ancient India?**\n2. **How did the urban planning in ancient Indian cities like Mohenjo-Daro and Harappa contribute to their growth and development?**\n3. **What navigation techniques were used by ancient Indian navigators to facilitate trade across the Indian Ocean and beyond?**\n4. **What were some of the notable trade networks established by ancient India with other regions of the world?**\n5. **What were some of the significant cultural influences that contributed to the rich tradition of classical Indian art, literature, and philosophy?**\n6. **How did the Delhi Sultanate impact Indian culture, architecture, and social structure?**\n7. **What were some of the notable architectural styles developed during the Delhi Sultanate period?**\n8. **How did the Sultanate facilitate the blending of Hindu and Islamic traditions in India?**\n9. **What were some of the significant scientific contributions made by ancient India in the fields of mathematics and astronomy?**\n10. **How did the partition of British India in 1947 impact the lives of millions of people and the relationship between India and Pakistan?**\n11. **What were some of the key features of the Constitution of India adopted in 1950?**\n12. **What were some of the significant economic reforms initiated in India in the early 1990s?**\n\n**Source Document(s)**\n\nThese questions are based on the provided context from the documents on ancient India's history, culture, and contributions to science and technology.",
+      "sources": [
+        "Assignment 3 .pdf",
+        "Assignment 1.pdf"
+      ],
+      "timestamp": "2025-12-30 19:49:27"
+    }
+  ],
+  "title": "Create imp questions from these assignment",
+  "created": "2025-12-30 19:48"
+}
