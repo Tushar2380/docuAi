@@ -528,3 +528,31 @@ function toast(msg, type) {
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
 }
+
+// ✅ ADD THIS TO THE BOTTOM OF script.js
+async function checkHealth() {
+    const badge = document.getElementById('badge');
+    try {
+        console.log("Checking health of:", API);
+        const res = await fetch(`${API}/`); // Fetches root endpoint
+        const data = await res.json();
+        
+        if (data.status === 'online') {
+            badge.textContent = 'Online';
+            badge.style.backgroundColor = '#4caf50'; // Green
+            badge.classList.add('active');
+        }
+    } catch (e) {
+        console.error("Health Check Failed:", e);
+        badge.textContent = 'Offline';
+        badge.style.backgroundColor = '#f44336'; // Red
+        badge.classList.remove('active');
+    }
+}
+
+// ✅ UPDATE window.onload to run the check
+const originalOnload = window.onload;
+window.onload = () => {
+    if (originalOnload) originalOnload(); // Run existing setup
+    checkHealth(); // Run our new check
+};
