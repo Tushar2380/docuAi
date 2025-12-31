@@ -483,23 +483,98 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* Mobile */
+/* 📱 IMPROVED MOBILE FIX */
 @media (max-width: 768px) {
+    .app {
+        flex-direction: column;
+        height: 100dvh; /* Uses 'Dynamic' height to fit between mobile browser bars */
+        overflow: hidden; /* Prevents double scrollbars */
+    }
+
+    /* Sidebar: Hide off-screen by default */
     .sidebar {
         position: fixed;
-        left: -280px;
-        height: 100%;
-        z-index: 100;
+        left: -100%; /* Fully hidden */
+        top: 0;
+        bottom: 0;
+        width: 80%; /* Takes mostly full width */
+        z-index: 9999;
+        transition: left 0.3s ease;
+        background: var(--bg-secondary);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.3);
     }
-    
+
     .sidebar.open {
-        left: 0;
+        left: 0; /* Slide in */
+    }
+
+    /* Main Area: Must fill space but leave room for input */
+    .main {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    /* Chat Area: Flex-grow to fill space, scrollable */
+    .chat {
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 80px; /* Extra padding so text isn't behind input */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iPhone */
+    }
+
+    /* Input Area: STICK to bottom */
+    .input-area {
+        position: relative; /* Stays in flow */
+        padding: 10px;
+        background: var(--bg-primary);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0; /* Never shrink */
+        z-index: 100;
+        padding-bottom: env(safe-area-inset-bottom); /* Fix for iPhone X/11/12+ bottom bar */
     }
     
-    .btn-menu {
-        display: block;
-    }
-    
-    .msg-content {
-        max-width: 85%;
+}
+/* --- SIDEBAR HEADER FIXES --- */
+
+/* Row 1: Title & Close Button */
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+/* The X Button (Hidden on Desktop, Visible on Mobile) */
+.btn-close-sidebar {
+    background: none;
+    border: none;
+    color: var(--text-primary); /* Make sure --text-primary is defined or use var(--text) */
+    font-size: 2rem;
+    cursor: pointer;
+    display: none; /* Hide on laptop */
+    line-height: 1;
+    padding: 0 5px;
+}
+
+/* Row 2: New Chat & Theme Button */
+.actions-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+/* Make New Chat button take available space */
+.btn-new {
+    flex: 1; 
+}
+
+/* 📱 MOBILE ONLY RULES */
+@media (max-width: 768px) {
+    .btn-close-sidebar {
+        display: block; /* Show X button on mobile */
     }
 }

@@ -4,6 +4,27 @@ const API = 'https://docuchat-ai-bgjh.onrender.com';
 let sessionId = null;
 let theme = 'light';
 
+// ✅ ADD THIS AT THE TOP
+function getUserId() {
+    let userId = localStorage.getItem('docuchat_user_id');
+    if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('docuchat_user_id', userId);
+    }
+    return userId;
+}
+
+// ========== USER IDENTITY (NEW) ==========
+function getUserId() {
+    let userId = localStorage.getItem('docuchat_user_id');
+    if (!userId) {
+        // Generate a random unique ID for this device
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('docuchat_user_id', userId);
+    }
+    return userId;
+}
+
 // ========== SESSION MANAGEMENT ==========
 
 // Load session from localStorage
@@ -101,8 +122,12 @@ async function upload(files) {
         form.append('file', file);
         
         try {
+            // ✅ NEW CODE WITH USER-ID
             const res = await fetch(`${API}/upload`, {
                 method: 'POST',
+                headers: {
+                    'user-id': getUserId() // 👈 This is the key part
+                },
                 body: form
             });
             

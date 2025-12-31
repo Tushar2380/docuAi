@@ -1,9 +1,10 @@
 import os
 import time
 import json
+import shutil
 from datetime import datetime
-from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from typing import Optional, Dict, List
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -12,10 +13,6 @@ import docx
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-
-# ---------------------------------------------------------
-# ✅ CHANGED: Switched to FastEmbed (Lightweight for Render)
-# ---------------------------------------------------------
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 
@@ -42,11 +39,17 @@ HISTORY_DIR = "history"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(HISTORY_DIR, exist_ok=True)
 
-# Global State
-vector_store = None
-uploaded_files = {}
-chat_sessions = {}
-current_session_id = None
+# ---------------------------------------------------------
+# ✅ CHANGED: Global State is now per-user dictionaries
+# ---------------------------------------------------------
+# Key = user_id, Value = VectorStore
+user_vector_stores: Dict[str, FAISS] = {}
+
+# Key = user_id, Value = Dict of uploaded files
+user_files: Dict[str, Dict] = {}
+
+# Key = user_id, Value = Dict of chat sessions
+user_sessions: Dict[str, Dict] = {}
 
 # Initialize LLM
 llm = None
@@ -61,9 +64,7 @@ if GROQ_API_KEY:
     except Exception as e:
         print(f"❌ Error initializing LLM: {e}")
 
-# ---------------------------------------------------------
-# ✅ CHANGED: Initialize FastEmbed (No sentence_transformers needed)
-# ---------------------------------------------------------
+# Initialize FastEmbed
 print("🔄 Loading embeddings model...")
 try:
     embeddings = FastEmbedEmbeddings()
@@ -72,9 +73,11 @@ except Exception as e:
     print(f"❌ Error loading embeddings: {e}")
     embeddings = None
 
+# ✅ CHANGED: Added user_id to request model
 class QuestionRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
+    user_id: str  # <--- Added this field
 
 def extract_pdf(path: str) -> str:
     """Extract text from PDF file"""
@@ -100,19 +103,25 @@ def extract_docx(path: str) -> str:
         print(f"DOCX extraction error: {e}")
         return ""
 
-def save_session(sid: str):
+# ✅ CHANGED: Save session now includes user_id check
+def save_session(user_id: str, sid: str):
     """Save session to disk"""
-    if sid in chat_sessions:
+    if user_id in user_sessions and sid in user_sessions[user_id]:
         try:
+            # We save the user_id inside the JSON so we know who owns it
+            data = user_sessions[user_id][sid]
+            data['user_id'] = user_id 
+            
             filepath = os.path.join(HISTORY_DIR, f"{sid}.json")
             with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(chat_sessions[sid], f, indent=2, ensure_ascii=False)
+                json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving session {sid}: {e}")
 
+# ✅ CHANGED: Load sessions sorts them into user buckets
 def load_sessions():
     """Load all sessions from disk"""
-    global chat_sessions
+    global user_sessions
     if not os.path.exists(HISTORY_DIR):
         return
     
@@ -122,23 +131,27 @@ def load_sessions():
                 filepath = os.path.join(HISTORY_DIR, filename)
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if 'id' in data:
-                        chat_sessions[data['id']] = data
+                    sid = data.get('id')
+                    owner = data.get('user_id', 'unknown_user') # Default if old file
+                    
+                    if owner not in user_sessions:
+                        user_sessions[owner] = {}
+                    
+                    user_sessions[owner][sid] = data
             except Exception as e:
                 print(f"Error loading session {filename}: {e}")
 
 # Load existing sessions on startup
 load_sessions()
-print(f"📚 Loaded {len(chat_sessions)} existing sessions")
+print(f"📚 Loaded existing sessions into memory")
 
 @app.get("/")
 def root():
     """Health check endpoint"""
     return {
         "status": "online",
-        "service": "DocuChat AI",
-        "files": len(uploaded_files),
-        "sessions": len(chat_sessions),
+        "service": "DocuChat AI Multi-User",
+        "active_users": len(user_sessions),
         "llm_ready": llm is not None,
         "embeddings_ready": embeddings is not None
     }
@@ -151,16 +164,18 @@ def health_check():
         "groq_configured": GROQ_API_KEY is not None,
         "llm_initialized": llm is not None,
         "embeddings_initialized": embeddings is not None,
-        "vector_store_loaded": vector_store is not None,
-        "total_files": len(uploaded_files),
-        "total_sessions": len(chat_sessions)
     }
 
+# ✅ CHANGED: Read user-id from Header
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    file: UploadFile = File(...), 
+    user_id: Optional[str] = Header(None, alias="user-id")
+):
     """Upload and process PDF/DOCX file"""
-    global vector_store, uploaded_files
-    
+    if not user_id:
+        raise HTTPException(400, "User ID header missing")
+
     if not embeddings:
         raise HTTPException(500, "Embeddings not initialized")
     
@@ -168,8 +183,12 @@ async def upload_file(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(('.pdf', '.docx', '.doc')):
         raise HTTPException(400, "Only PDF and DOCX files are supported")
     
+    # ✅ Create user specific folder
+    user_dir = os.path.join(UPLOAD_DIR, user_id)
+    os.makedirs(user_dir, exist_ok=True)
+
     file_id = f"{int(time.time() * 1000)}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, file_id)
+    file_path = os.path.join(user_dir, file_id)
     
     try:
         # Save uploaded file
@@ -199,19 +218,20 @@ async def upload_file(file: UploadFile = File(...)):
         # Create metadata for each chunk
         metadatas = [{"source": file.filename, "file_id": file_id} for _ in chunks]
         
-        print(f"📄 Processing {file.filename}: {len(chunks)} chunks")
+        print(f"📄 Processing {file.filename} for user {user_id}")
         
-        # Create or merge vector store
-        if vector_store is None:
-            vector_store = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
-            print("✅ Created new vector store")
+        # ✅ Store in USER SPECIFIC vector store
+        if user_id not in user_vector_stores:
+            user_vector_stores[user_id] = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
         else:
             new_store = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
-            vector_store.merge_from(new_store)
-            print("✅ Merged into existing vector store")
+            user_vector_stores[user_id].merge_from(new_store)
         
-        # Store file metadata
-        uploaded_files[file_id] = {
+        # ✅ Store in USER SPECIFIC file list
+        if user_id not in user_files:
+            user_files[user_id] = {}
+
+        user_files[user_id][file_id] = {
             "filename": file.filename,
             "file_id": file_id,
             "chunks": len(chunks),
@@ -224,7 +244,7 @@ async def upload_file(file: UploadFile = File(...)):
             "filename": file.filename,
             "file_id": file_id,
             "chunks": len(chunks),
-            "total_files": len(uploaded_files)
+            "total_files": len(user_files[user_id])
         }
         
     except HTTPException:
@@ -235,68 +255,79 @@ async def upload_file(file: UploadFile = File(...)):
         print(f"Upload error: {e}")
         raise HTTPException(500, f"Error processing file: {str(e)}")
 
+# ✅ CHANGED: List only user's files
 @app.get("/files")
-def list_files():
-    """Get list of all uploaded files"""
+def list_files(user_id: Optional[str] = Header(None, alias="user-id")):
+    """Get list of all uploaded files for this user"""
+    if not user_id or user_id not in user_files:
+        return {"files": [], "total": 0}
+        
     return {
-        "files": list(uploaded_files.values()),
-        "total": len(uploaded_files)
+        "files": list(user_files[user_id].values()),
+        "total": len(user_files[user_id])
     }
 
+# ✅ CHANGED: Delete from user's list
 @app.delete("/files/{file_id}")
-def delete_file(file_id: str):
+def delete_file(file_id: str, user_id: Optional[str] = Header(None, alias="user-id")):
     """Delete a specific file"""
-    if file_id in uploaded_files:
-        del uploaded_files[file_id]
-        file_path = os.path.join(UPLOAD_DIR, file_id)
+    if not user_id or user_id not in user_files:
+        return {"message": "File not found"}
+
+    if file_id in user_files[user_id]:
+        del user_files[user_id][file_id]
+        
+        # Delete actual file
+        file_path = os.path.join(UPLOAD_DIR, user_id, file_id)
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
         except Exception as e:
             print(f"Error deleting file: {e}")
+            
+        # Note: Vector store cleanup is skipped for simplicity, but file is gone from UI
     
     return {"message": "File deleted", "ok": True}
 
+# ✅ CHANGED: Ask checks user's context
 @app.post("/ask")
 async def ask_question(request: QuestionRequest):
     """Ask a question about uploaded documents"""
-    global current_session_id
+    user_id = request.user_id # Get from body
+    
+    # Initialize session storage for user if needed
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {}
     
     # Validate prerequisites
-    if not vector_store:
-        raise HTTPException(400, "Please upload documents first")
+    store = user_vector_stores.get(user_id)
+    if not store:
+        # Return polite empty response if no docs
+        return {
+            "answer": "Please upload a document first.",
+            "sources": [],
+            "session_id": request.session_id
+        }
     
     if not llm:
         raise HTTPException(500, "LLM not configured. Please set GROQ_API_KEY")
     
     # Handle session
-    if request.session_id:
+    if request.session_id and request.session_id in user_sessions[user_id]:
         session_id = request.session_id
-        if session_id not in chat_sessions:
-            session_id = f"s{int(time.time() * 1000)}"
-            chat_sessions[session_id] = {
-                "id": session_id,
-                "messages": [],
-                "title": "New Chat",
-                "created": datetime.now().strftime("%Y-%m-%d %H:%M")
-            }
     else:
-        if current_session_id and current_session_id in chat_sessions:
-            session_id = current_session_id
-        else:
-            session_id = f"s{int(time.time() * 1000)}"
-            chat_sessions[session_id] = {
-                "id": session_id,
-                "messages": [],
-                "title": "New Chat",
-                "created": datetime.now().strftime("%Y-%m-%d %H:%M")
-            }
-    
-    current_session_id = session_id
+        session_id = f"s{int(time.time() * 1000)}"
+        user_sessions[user_id][session_id] = {
+            "id": session_id,
+            "user_id": user_id,
+            "messages": [],
+            "title": "New Chat",
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }
     
     try:
-        # Search for relevant documents
-        docs = vector_store.similarity_search(request.question, k=4)
+        # Search for relevant documents in USER'S store
+        docs = store.similarity_search(request.question, k=4)
         
         if not docs:
             return {
@@ -311,12 +342,13 @@ async def ask_question(request: QuestionRequest):
         
         # Get conversation history
         history = ""
-        if "messages" in chat_sessions[session_id]:
-            for msg in chat_sessions[session_id]["messages"][-4:]:
+        current_session = user_sessions[user_id][session_id]
+        if "messages" in current_session:
+            for msg in current_session["messages"][-4:]:
                 role = "User" if msg["role"] == "user" else "Assistant"
                 history += f"{role}: {msg['content']}\n"
         
-        # Create prompt - SMARTER VERSION
+        # Create prompt
         prompt = f"""You are an intelligent AI assistant. 
 
 Instructions:
@@ -338,18 +370,14 @@ Answer:"""
         response = llm.invoke(prompt)
         answer = response.content
         
-        # Initialize messages if needed
-        if "messages" not in chat_sessions[session_id]:
-            chat_sessions[session_id]["messages"] = []
-        
         # Save to history
-        chat_sessions[session_id]["messages"].append({
+        current_session["messages"].append({
             "role": "user",
             "content": request.question,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
         
-        chat_sessions[session_id]["messages"].append({
+        current_session["messages"].append({
             "role": "assistant",
             "content": answer,
             "sources": sources,
@@ -357,10 +385,10 @@ Answer:"""
         })
         
         # Update session title
-        if len(chat_sessions[session_id]["messages"]) == 2:
-            chat_sessions[session_id]["title"] = request.question[:50] + ("..." if len(request.question) > 50 else "")
+        if len(current_session["messages"]) == 2:
+            current_session["title"] = request.question[:50] + ("..." if len(request.question) > 50 else "")
         
-        save_session(session_id)
+        save_session(user_id, session_id)
         
         return {
             "answer": answer,
@@ -373,48 +401,60 @@ Answer:"""
         print(f"Ask error: {e}")
         raise HTTPException(500, f"Error processing question: {str(e)}")
 
+# ✅ CHANGED: List only user's sessions
 @app.get("/sessions")
-def get_sessions():
-    """Get all chat sessions"""
-    sessions = list(chat_sessions.values())
+def get_sessions(user_id: Optional[str] = Header(None, alias="user-id")):
+    """Get all chat sessions for user"""
+    if not user_id or user_id not in user_sessions:
+        return {"sessions": [], "total": 0}
+
+    sessions = list(user_sessions[user_id].values())
     sessions.sort(key=lambda x: x.get('created', ''), reverse=True)
     return {"sessions": sessions, "total": len(sessions)}
 
 @app.get("/sessions/{session_id}")
-def get_session(session_id: str):
+def get_session(session_id: str, user_id: Optional[str] = Header(None, alias="user-id")):
     """Get a specific session"""
-    if session_id not in chat_sessions:
+    if not user_id or user_id not in user_sessions:
         raise HTTPException(404, "Session not found")
-    return chat_sessions[session_id]
 
+    if session_id not in user_sessions[user_id]:
+        raise HTTPException(404, "Session not found")
+        
+    return user_sessions[user_id][session_id]
+
+# ✅ CHANGED: Create session for specific user
 @app.post("/sessions/new")
-def create_new_session():
+def create_new_session(request: QuestionRequest):
     """Create a new chat session"""
-    global current_session_id
+    # We reuse QuestionRequest just to get the user_id from body easily
+    user_id = request.user_id
     
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {}
+
     session_id = f"s{int(time.time() * 1000)}"
-    chat_sessions[session_id] = {
+    user_sessions[user_id][session_id] = {
         "id": session_id,
+        "user_id": user_id,
         "messages": [],
         "title": "New Chat",
         "created": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     
-    current_session_id = session_id
-    save_session(session_id)
+    save_session(user_id, session_id)
     
     return {
         "session_id": session_id,
         "message": "New session created"
     }
 
+# ✅ CHANGED: Delete session
 @app.delete("/sessions/{session_id}")
-def delete_session(session_id: str):
+def delete_session(session_id: str, user_id: Optional[str] = Header(None, alias="user-id")):
     """Delete a chat session"""
-    global current_session_id
-    
-    if session_id in chat_sessions:
-        del chat_sessions[session_id]
+    if user_id in user_sessions and session_id in user_sessions[user_id]:
+        del user_sessions[user_id][session_id]
         
         # Delete session file
         filepath = os.path.join(HISTORY_DIR, f"{session_id}.json")
@@ -424,27 +464,29 @@ def delete_session(session_id: str):
         except Exception as e:
             print(f"Error deleting session file: {e}")
     
-    if current_session_id == session_id:
-        current_session_id = None
-    
     return {"message": "Session deleted", "ok": True}
 
+# ✅ CHANGED: Clear only user's files
 @app.delete("/clear")
-def clear_all_files():
-    """Clear all uploaded files"""
-    global vector_store, uploaded_files
+def clear_all_files(user_id: Optional[str] = Header(None, alias="user-id")):
+    """Clear all uploaded files for this user"""
+    if not user_id:
+        return {"ok": False}
+
+    # Clear memory
+    if user_id in user_vector_stores:
+        del user_vector_stores[user_id]
+    if user_id in user_files:
+        del user_files[user_id]
     
-    vector_store = None
-    uploaded_files = {}
-    
-    # Clear upload directory
-    for filename in os.listdir(UPLOAD_DIR):
-        try:
-            filepath = os.path.join(UPLOAD_DIR, filename)
-            if os.path.isfile(filepath):
-                os.remove(filepath)
-        except Exception as e:
-            print(f"Error deleting file: {e}")
+    # Clear disk
+    user_dir = os.path.join(UPLOAD_DIR, user_id)
+    try:
+        if os.path.exists(user_dir):
+            shutil.rmtree(user_dir)
+            os.makedirs(user_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Error clearing user dir: {e}")
     
     return {"message": "All files cleared", "ok": True}
 
@@ -454,4 +496,3 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"🚀 Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
-    

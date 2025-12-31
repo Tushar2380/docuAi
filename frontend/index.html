@@ -10,11 +10,17 @@
     <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h1>📚 DocuChat</h1>
-                <button class="btn-new" onclick="newChat()">✨ New Chat</button>
-                <button class="btn-theme" onclick="toggleTheme()">
-                    <span id="themeIcon">🌙</span>
-                </button>
+                <div class="header-row">
+                    <h1>📚 DocuChat</h1>
+                    <button class="btn-close-sidebar" onclick="toggleSidebar()">×</button>
+                </div>
+                
+                <div class="actions-row">
+                    <button class="btn-new" onclick="newChat()">✨ New Chat</button>
+                    <button class="btn-theme" onclick="toggleTheme()">
+                        <span id="themeIcon">🌙</span>
+                    </button>
+                </div>
             </div>
             
             <div class="sidebar-body">
