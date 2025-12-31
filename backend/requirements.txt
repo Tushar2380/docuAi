@@ -9,4 +9,3 @@ langchain-groq
 faiss-cpu
 fastembed
 python-multipart
-huggingface-hub

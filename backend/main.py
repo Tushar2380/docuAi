@@ -12,7 +12,10 @@ import docx
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+# ---------------------------------------------------------
+# ✅ UPGRADE: Switch to FastEmbed (Lightweight & Error-Free)
+# ---------------------------------------------------------
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 
 load_dotenv()
@@ -57,14 +60,13 @@ if GROQ_API_KEY:
     except Exception as e:
         print(f"❌ Error initializing LLM: {e}")
 
-# Initialize Embeddings
+# ---------------------------------------------------------
+# ✅ FIX: Load Lightweight Embeddings (Fixes Render Error)
+# ---------------------------------------------------------
 print("🔄 Loading embeddings model...")
 try:
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
+    # This uses much less RAM and doesn't need sentence_transformers
+    embeddings = FastEmbedEmbeddings()
     print("✅ Embeddings loaded successfully!")
 except Exception as e:
     print(f"❌ Error loading embeddings: {e}")
