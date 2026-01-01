@@ -4,77 +4,132 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DocuChat AI</title>
-    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        dark: '#0f172a'
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-    <div class="app">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="header-row">
-                    <h1>📚 DocuChat</h1>
-                    <button class="btn-close-sidebar" onclick="toggleSidebar()">×</button>
-                </div>
-                
-                <div class="actions-row">
-                    <button class="btn-new" onclick="newChat()">✨ New Chat</button>
-                    <button class="btn-theme" onclick="toggleTheme()">
-                        <span id="themeIcon">🌙</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="sidebar-body">
-                <div class="section">
-                    <h3>History</h3>
-                    <div id="historyList" class="list"></div>
-                </div>
-                
-                <div class="section">
-                    <h3>Upload</h3>
-                    <div class="upload-box" id="uploadBox">
-                        <span>📤</span>
-                        <p>Drop PDF/DOCX</p>
+<body class="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+            <div class="flex flex-col h-full">
+                <!-- Header -->
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-4">
+                        <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
+                            📚 DocuChat
+                        </h1>
+                        <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
                     </div>
-                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc" multiple hidden>
-                </div>
-                
-                <div class="section">
-                    <h3>Files (<span id="fileCount">0</span>)</h3>
-                    <div id="fileList" class="list"></div>
-                    <button class="btn-clear" onclick="clearAll()" id="clearBtn" style="display:none">
-                        🗑️ Clear All
+                    
+                    <button onclick="newChat()" class="w-full bg-primary text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2">
+                        ✨ New Chat
                     </button>
+                    
+                    <button onclick="toggleTheme()" class="w-full mt-2 bg-gray-100 dark:bg-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        <span id="themeIcon">🌙</span> <span id="themeText">Dark Mode</span>
+                    </button>
+                </div>
+
+                <!-- Scrollable Content -->
+                <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                    <!-- UPLOAD SECTION - NOW FIRST -->
+                    <div>
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Upload Documents</h3>
+                        <div id="uploadBox" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+                            <div class="text-4xl mb-2">📤</div>
+                            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Drop PDF/DOCX</p>
+                            <p class="text-xs text-gray-500 mt-1">or click to browse</p>
+                        </div>
+                        <input type="file" id="fileInput" accept=".pdf,.docx,.doc" multiple class="hidden">
+                    </div>
+
+                    <!-- Files -->
+                    <div>
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                            Files (<span id="fileCount">0</span>)
+                        </h3>
+                        <div id="fileList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                        <button id="clearBtn" onclick="clearAll()" class="hidden w-full mt-3 text-sm px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            🗑️ Clear All
+                        </button>
+                    </div>
+
+                    <!-- History -->
+                    <div>
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">History</h3>
+                        <div id="historyList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                    </div>
                 </div>
             </div>
         </aside>
-        
-        <main class="main">
-            <div class="header">
-                <button class="btn-menu" onclick="toggleSidebar()">☰</button>
-                <h2>AI Assistant</h2>
-                <div class="badge" id="badge">Ready</div>
-            </div>
-            
-            <div class="chat" id="chat">
-                <div class="empty">
-                    <h2>Welcome to DocuChat AI</h2>
-                    <p>Upload documents and ask questions</p>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col lg:ml-80">
+            <!-- Header -->
+            <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center gap-4">
+                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white">AI Assistant</h2>
+                <div id="badge" class="ml-auto px-3 py-1 text-xs font-medium rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    Ready
+                </div>
+            </header>
+
+            <!-- Chat Messages -->
+            <div id="chat" class="flex-1 overflow-y-auto p-4 lg:p-6">
+                <div class="max-w-4xl mx-auto h-full flex items-center justify-center">
+                    <div class="text-center">
+                        <div class="text-6xl mb-4">💬</div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Welcome to DocuChat AI</h2>
+                        <p class="text-gray-600 dark:text-gray-400">Upload PDF or DOCX documents and start asking questions</p>
+                    </div>
                 </div>
             </div>
-            
-            <div class="input-area">
-                <input 
-                    type="text" 
-                    id="input" 
-                    placeholder="Ask about your documents..."
-                    onkeypress="if(event.key==='Enter') send()"
-                >
-                <button onclick="send()" id="sendBtn">➤</button>
+
+            <!-- Input Area -->
+            <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                <div class="max-w-4xl mx-auto flex gap-3">
+                    <input 
+                        type="text" 
+                        id="input" 
+                        placeholder="Ask about your documents..."
+                        class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 outline-none transition-all"
+                        onkeypress="if(event.key==='Enter') send()"
+                    >
+                    <button 
+                        id="sendBtn" 
+                        onclick="send()"
+                        class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                        ➤
+                    </button>
+                </div>
             </div>
         </main>
     </div>
-    
-    <div id="toast"></div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white transform translate-x-full transition-transform duration-300 z-50"></div>
+
     <script src="script.js"></script>
 </body>
 </html>

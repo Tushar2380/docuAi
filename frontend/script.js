@@ -1,14 +1,10 @@
-// YOUR RENDER URL
 const API = 'https://docuchat-ai-bgjh.onrender.com';
 
 let sessionId = null;
-let theme = 'light';
 let userId = null;
 
-// ========== USER ID MANAGEMENT ==========
 function getUserId() {
     if (userId) return userId;
-    
     let stored = localStorage.getItem('docuchat_user_id');
     if (!stored) {
         stored = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -18,58 +14,47 @@ function getUserId() {
     return userId;
 }
 
-// ========== SESSION MANAGEMENT ==========
-function loadSavedSession() {
-    try {
-        const saved = localStorage.getItem('docuchat_session');
-        if (saved) {
-            sessionId = saved;
-        }
-    } catch (e) {
-        console.log('No saved session');
-    }
+function saveSession() {
+    if (sessionId) localStorage.setItem('docuchat_session', sessionId);
 }
 
-function saveSessionToStorage() {
-    if (sessionId) {
-        localStorage.setItem('docuchat_session', sessionId);
-    }
+function loadSession() {
+    sessionId = localStorage.getItem('docuchat_session');
 }
 
-function clearSavedSession() {
-    localStorage.removeItem('docuchat_session');
-}
-
-function updateSessionIndicator() {
+function updateBadge() {
     const badge = document.getElementById('badge');
-    if (sessionId) {
-        badge.textContent = 'In Chat';
-        badge.classList.add('active');
-    } else {
-        badge.textContent = 'Ready';
-        badge.classList.remove('active');
-    }
+    badge.textContent = sessionId ? 'In Chat' : 'Ready';
+    badge.className = sessionId 
+        ? 'ml-auto px-3 py-1 text-xs font-medium rounded-full bg-green-500 text-white'
+        : 'ml-auto px-3 py-1 text-xs font-medium rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
 }
 
-// ========== INIT ==========
 window.onload = () => {
-    getUserId(); // Initialize user ID
-    loadSavedSession();
+    getUserId();
+    loadSession();
     loadFiles();
     loadHistory();
     setupUpload();
-    updateSessionIndicator();
-    checkHealth();
+    updateBadge();
 };
 
-// ========== THEME ==========
 function toggleTheme() {
-    theme = theme === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    document.getElementById('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️';
+    const html = document.documentElement;
+    const icon = document.getElementById('themeIcon');
+    const text = document.getElementById('themeText');
+    
+    if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        icon.textContent = '🌙';
+        text.textContent = 'Dark Mode';
+    } else {
+        html.classList.add('dark');
+        icon.textContent = '☀️';
+        text.textContent = 'Light Mode';
+    }
 }
 
-// ========== UPLOAD ==========
 function setupUpload() {
     const box = document.getElementById('uploadBox');
     const input = document.getElementById('fileInput');
@@ -78,16 +63,16 @@ function setupUpload() {
     
     box.ondragover = (e) => {
         e.preventDefault();
-        box.style.borderColor = 'var(--primary)';
+        box.classList.add('border-primary', 'bg-primary/10');
     };
     
     box.ondragleave = () => {
-        box.style.borderColor = '';
+        box.classList.remove('border-primary', 'bg-primary/10');
     };
     
     box.ondrop = (e) => {
         e.preventDefault();
-        box.style.borderColor = '';
+        box.classList.remove('border-primary', 'bg-primary/10');
         upload(e.dataTransfer.files);
     };
     
@@ -97,7 +82,7 @@ function setupUpload() {
 async function upload(files) {
     if (!files.length) return;
     
-    toast('Uploading...', 'info');
+    toast('Uploading files...', 'info');
     let ok = 0;
     
     for (let file of files) {
@@ -109,42 +94,31 @@ async function upload(files) {
         try {
             const res = await fetch(`${API}/upload`, {
                 method: 'POST',
-                headers: {
-                    'user-id': getUserId()
-                },
+                headers: { 'user-id': getUserId() },
                 body: form
             });
             
-            if (res.ok) {
-                ok++;
-            } else {
-                const err = await res.json();
-                console.error('Upload failed:', err);
-            }
+            if (res.ok) ok++;
         } catch (e) {
-            console.error('Upload error:', e);
+            console.error(e);
         }
     }
     
     document.getElementById('fileInput').value = '';
     
     if (ok > 0) {
-        toast(`${ok} file(s) uploaded`, 'success');
-        setTimeout(() => loadFiles(), 500);
+        toast(`${ok} file(s) uploaded successfully`, 'success');
+        setTimeout(loadFiles, 500);
     } else {
         toast('Upload failed', 'error');
     }
 }
 
-// ========== FILES ==========
 async function loadFiles() {
     try {
         const res = await fetch(`${API}/files`, {
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
-        
         const data = await res.json();
         
         const list = document.getElementById('fileList');
@@ -154,24 +128,19 @@ async function loadFiles() {
         count.textContent = data.total || 0;
         
         if (data.files && data.files.length > 0) {
-            list.innerHTML = '';
-            data.files.forEach(f => {
-                const div = document.createElement('div');
-                div.className = 'item';
-                div.innerHTML = `
-                    <span class="item-text">${f.filename.endsWith('.pdf') ? '📄' : '📝'} ${f.filename}</span>
-                    <span class="item-del" onclick="delFile('${f.file_id}')">×</span>
-                `;
-                list.appendChild(div);
-            });
-            clearBtn.style.display = 'block';
+            list.innerHTML = data.files.map(f => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                    <span class="text-sm truncate flex-1">${f.filename.endsWith('.pdf') ? '📄' : '📝'} ${f.filename}</span>
+                    <button onclick="delFile('${f.file_id}')" class="ml-2 text-red-500 hover:text-red-700 font-bold">×</button>
+                </div>
+            `).join('');
+            clearBtn.classList.remove('hidden');
         } else {
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:0.9em">No files</div>';
-            clearBtn.style.display = 'none';
+            list.innerHTML = '<div class="text-center py-8 text-sm text-gray-500">No files uploaded</div>';
+            clearBtn.classList.add('hidden');
         }
     } catch (e) {
-        console.error('Load files error:', e);
-        toast('Backend offline', 'error');
+        console.error(e);
     }
 }
 
@@ -181,14 +150,11 @@ async function delFile(fid) {
     try {
         await fetch(`${API}/files/${fid}`, {
             method: 'DELETE',
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
         toast('File deleted', 'success');
         loadFiles();
     } catch (e) {
-        console.error('Delete error:', e);
         toast('Error deleting file', 'error');
     }
 }
@@ -199,89 +165,67 @@ async function clearAll() {
     try {
         await fetch(`${API}/clear`, {
             method: 'DELETE',
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
         toast('All files cleared', 'success');
         loadFiles();
     } catch (e) {
-        console.error('Clear error:', e);
-        toast('Error clearing files', 'error');
+        toast('Error', 'error');
     }
 }
 
-// ========== HISTORY ==========
 async function loadHistory() {
     try {
         const res = await fetch(`${API}/sessions`, {
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
-        
         const data = await res.json();
         
         const list = document.getElementById('historyList');
         
         if (data.sessions && data.sessions.length > 0) {
-            list.innerHTML = '';
-            data.sessions.forEach(s => {
-                const div = document.createElement('div');
-                div.className = 'item';
-                if (s.id === sessionId) div.classList.add('active');
-                div.innerHTML = `
-                    <span class="item-text" onclick="loadSession('${s.id}')">${s.title}</span>
-                    <span class="item-del" onclick="delSession('${s.id}', event)">×</span>
-                `;
-                list.appendChild(div);
-            });
+            list.innerHTML = data.sessions.map(s => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${s.id === sessionId ? 'ring-2 ring-primary' : ''}">
+                    <button onclick="loadChatSession('${s.id}')" class="text-sm truncate flex-1 text-left">${s.title}</button>
+                    <button onclick="delSession('${s.id}', event)" class="ml-2 text-red-500 hover:text-red-700 font-bold">×</button>
+                </div>
+            `).join('');
         } else {
-            list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-light);font-size:0.9em">No history</div>';
+            list.innerHTML = '<div class="text-center py-8 text-sm text-gray-500">No chat history</div>';
         }
     } catch (e) {
-        console.error('Load history error:', e);
+        console.error(e);
     }
 }
 
-async function loadSession(sid) {
+async function loadChatSession(sid) {
     try {
         const res = await fetch(`${API}/sessions/${sid}`, {
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
         
-        if (!res.ok) throw new Error('Session not found');
+        if (!res.ok) return;
         
         const data = await res.json();
-        
         sessionId = sid;
-        saveSessionToStorage();
-        updateSessionIndicator();
+        saveSession();
+        updateBadge();
         
         const chat = document.getElementById('chat');
-        chat.innerHTML = '';
+        chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4"></div>';
+        const container = chat.querySelector('div');
         
         if (data.messages && data.messages.length > 0) {
             data.messages.forEach(m => {
-                if (m.role === 'user') {
-                    addMsg(m.content, 'user', false);
-                } else {
-                    addMsg(m.content, 'ai', false, m.sources);
-                }
+                addMsg(m.content, m.role === 'user' ? 'user' : 'ai', false, m.sources);
             });
         }
         
         chat.scrollTop = chat.scrollHeight;
         loadHistory();
         
-        // Close sidebar on mobile after loading
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
-        }
+        if (window.innerWidth < 1024) toggleSidebar();
     } catch (e) {
-        console.error('Load session error:', e);
         toast('Error loading chat', 'error');
     }
 }
@@ -290,39 +234,30 @@ async function newChat() {
     try {
         const res = await fetch(`${API}/sessions/new`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                user_id: getUserId(),
-                question: "",
-                session_id: null
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: getUserId(), question: "", session_id: null })
         });
         
         const data = await res.json();
-        
         sessionId = data.session_id;
-        saveSessionToStorage();
-        updateSessionIndicator();
+        saveSession();
+        updateBadge();
         
-        const chat = document.getElementById('chat');
-        chat.innerHTML = `
-            <div class="empty">
-                <h2>New Chat Started</h2>
-                <p>Ask me anything about your documents</p>
+        document.getElementById('chat').innerHTML = `
+            <div class="max-w-4xl mx-auto h-full flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">✨</div>
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">New Chat Started</h2>
+                    <p class="text-gray-600 dark:text-gray-400">Ask me anything about your documents</p>
+                </div>
             </div>
         `;
         
         loadHistory();
         toast('New chat created', 'success');
         
-        // Close sidebar on mobile
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
-        }
+        if (window.innerWidth < 1024) toggleSidebar();
     } catch (e) {
-        console.error('New chat error:', e);
         toast('Error creating chat', 'error');
     }
 }
@@ -334,21 +269,21 @@ async function delSession(sid, e) {
     try {
         await fetch(`${API}/sessions/${sid}`, {
             method: 'DELETE',
-            headers: {
-                'user-id': getUserId()
-            }
+            headers: { 'user-id': getUserId() }
         });
         
         if (sessionId === sid) {
             sessionId = null;
-            clearSavedSession();
-            updateSessionIndicator();
+            localStorage.removeItem('docuchat_session');
+            updateBadge();
             
-            const chat = document.getElementById('chat');
-            chat.innerHTML = `
-                <div class="empty">
-                    <h2>Welcome to DocuChat AI</h2>
-                    <p>Upload documents and ask questions</p>
+            document.getElementById('chat').innerHTML = `
+                <div class="max-w-4xl mx-auto h-full flex items-center justify-center">
+                    <div class="text-center">
+                        <div class="text-6xl mb-4">💬</div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Welcome Back</h2>
+                        <p class="text-gray-600 dark:text-gray-400">Upload documents and start chatting</p>
+                    </div>
                 </div>
             `;
         }
@@ -356,12 +291,10 @@ async function delSession(sid, e) {
         toast('Chat deleted', 'success');
         loadHistory();
     } catch (e) {
-        console.error('Delete session error:', e);
-        toast('Error deleting chat', 'error');
+        toast('Error', 'error');
     }
 }
 
-// ========== CHAT ==========
 async function send() {
     const input = document.getElementById('input');
     const q = input.value.trim();
@@ -369,36 +302,25 @@ async function send() {
     if (!q) return;
     
     const chat = document.getElementById('chat');
-    const empty = chat.querySelector('.empty');
-    if (empty) empty.remove();
+    if (!chat.querySelector('.space-y-4')) {
+        chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4"></div>';
+    }
     
     addMsg(q, 'user', true);
     input.value = '';
     
     const tid = addTyping();
-    
     const btn = document.getElementById('sendBtn');
     btn.disabled = true;
     
     try {
-        const requestBody = {
-            question: q,
-            user_id: getUserId(),
-            session_id: sessionId
-        };
-        
         const res = await fetch(`${API}/ask`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: q, user_id: getUserId(), session_id: sessionId })
         });
         
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.detail || 'Request failed');
-        }
+        if (!res.ok) throw new Error('Request failed');
         
         const data = await res.json();
         
@@ -406,17 +328,15 @@ async function send() {
         
         if (data.session_id) {
             sessionId = data.session_id;
-            saveSessionToStorage();
-            updateSessionIndicator();
+            saveSession();
+            updateBadge();
         }
         
         addMsg(data.answer, 'ai', true, data.sources);
         loadHistory();
-        
     } catch (e) {
         removeTyping(tid);
-        console.error('Send error:', e);
-        toast(e.message || 'Connection error', 'error');
+        toast('Error getting response', 'error');
     } finally {
         btn.disabled = false;
     }
@@ -424,25 +344,33 @@ async function send() {
 
 function addMsg(text, type, scroll, sources) {
     const chat = document.getElementById('chat');
+    const container = chat.querySelector('.space-y-4') || chat;
+    
     const div = document.createElement('div');
-    div.className = `msg ${type}`;
+    div.className = `flex gap-3 ${type === 'user' ? 'flex-row-reverse' : ''}`;
     
     const avatar = document.createElement('div');
-    avatar.className = `avatar ${type}`;
+    avatar.className = `w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${
+        type === 'ai' ? 'bg-primary text-white' : 'bg-gray-300 dark:bg-gray-600'
+    }`;
     avatar.textContent = type === 'ai' ? '🤖' : '👤';
     
     const content = document.createElement('div');
-    content.className = 'msg-content';
+    content.className = `max-w-2xl p-4 rounded-2xl ${
+        type === 'ai' 
+            ? 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700' 
+            : 'bg-primary text-white'
+    }`;
     
     if (type === 'ai') {
         content.innerHTML = formatAI(text);
         
         if (sources && sources.length) {
             const srcDiv = document.createElement('div');
-            srcDiv.style.marginTop = '8px';
+            srcDiv.className = 'mt-3 flex flex-wrap gap-2';
             sources.forEach(s => {
                 const tag = document.createElement('span');
-                tag.className = 'source';
+                tag.className = 'px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full';
                 tag.textContent = `📄 ${s}`;
                 srcDiv.appendChild(tag);
             });
@@ -454,100 +382,71 @@ function addMsg(text, type, scroll, sources) {
     
     div.appendChild(avatar);
     div.appendChild(content);
-    chat.appendChild(div);
+    container.appendChild(div);
     
-    if (scroll) {
-        chat.scrollTop = chat.scrollHeight;
-    }
+    if (scroll) chat.scrollTop = chat.scrollHeight;
 }
 
 function formatAI(text) {
-    let paras = text.split('\n\n');
-    let html = '';
-    
-    paras.forEach(p => {
+    return text.split('\n\n').map(p => {
         p = p.trim();
-        if (!p) return;
+        if (!p) return '';
         
         if (p.includes('\n- ')) {
             const items = p.split('\n- ').filter(x => x.trim());
-            html += '<ul>';
-            items.forEach(i => {
-                if (i.trim()) html += `<li>${i.trim()}</li>`;
-            });
-            html += '</ul>';
+            return '<ul class="list-disc ml-4 space-y-1">' + items.map(i => `<li>${i.trim()}</li>`).join('') + '</ul>';
         } else if (/^\d+\./.test(p)) {
             const items = p.split(/\n\d+\.\s+/).filter(x => x.trim());
-            html += '<ol>';
-            items.forEach(i => {
-                if (i.trim()) html += `<li>${i.trim()}</li>`;
-            });
-            html += '</ol>';
-        } else {
-            html += `<p>${p}</p>`;
+            return '<ol class="list-decimal ml-4 space-y-1">' + items.map(i => `<li>${i.trim()}</li>`).join('') + '</ol>';
         }
-    });
-    
-    return html || `<p>${text}</p>`;
+        return `<p class="mb-3">${p}</p>`;
+    }).join('');
 }
 
 function addTyping() {
     const chat = document.getElementById('chat');
+    const container = chat.querySelector('.space-y-4') || chat;
+    
     const div = document.createElement('div');
-    div.className = 'msg ai';
-    const id = 't' + Date.now();
-    div.id = id;
+    div.className = 'flex gap-3';
+    div.id = 't' + Date.now();
     
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar ai';
-    avatar.textContent = '🤖';
+    div.innerHTML = `
+        <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center text-xl">🤖</div>
+        <div class="flex gap-1 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl">
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+        </div>
+    `;
     
-    const typing = document.createElement('div');
-    typing.className = 'typing';
-    typing.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-    
-    div.appendChild(avatar);
-    div.appendChild(typing);
-    chat.appendChild(div);
+    container.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
-    
-    return id;
+    return div.id;
 }
 
 function removeTyping(id) {
-    const el = document.getElementById(id);
-    if (el) el.remove();
+    document.getElementById(id)?.remove();
 }
 
-// ========== TOAST ==========
 function toast(msg, type) {
     const t = document.getElementById('toast');
-    const message = typeof msg === 'string' ? msg : JSON.stringify(msg);
-    t.textContent = message;
-    t.className = type;
-    t.style.display = 'block';
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        info: 'bg-blue-500'
+    };
+    
+    t.textContent = msg;
+    t.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${colors[type]} transform transition-transform duration-300`;
+    t.style.transform = 'translateX(0)';
     
     setTimeout(() => {
-        t.style.display = 'none';
+        t.style.transform = 'translateX(500px)';
     }, 3000);
 }
 
-// ========== SIDEBAR ==========
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-
-// ========== HEALTH CHECK ==========
-async function checkHealth() {
-    try {
-        const res = await fetch(`${API}/`);
-        const data = await res.json();
-        
-        if (data.status === 'online') {
-            console.log('Backend online:', data);
-        }
-    } catch (e) {
-        console.error('Health check failed:', e);
-        toast('Backend offline - may take a minute to wake up', 'error');
-    }
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('-translate-x-full');
 }
