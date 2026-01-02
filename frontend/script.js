@@ -45,8 +45,6 @@ window.onload = () => {
     
     // Check if we are in a fresh state and welcome the user
     if (!sessionId) {
-        const chat = document.getElementById('chat');
-        // Keep the welcome screen in HTML, but ensure badge is correct
         updateBadge();
     }
 };
@@ -67,11 +65,8 @@ function toggleTheme() {
     }
 }
 
-// --- UPLOAD LOGIC (FIXED) ---
+// --- UPLOAD LOGIC (ROBUST VERSION) ---
 function setupUpload() {
-    const box = document.getElementById('fileInput'); // The hidden input
-    // We bind the button in HTML via onclick, so we just need drag/drop if you add a drop zone later
-    // For now, the input change event is key
     const input = document.getElementById('fileInput');
     input.onchange = (e) => upload(e.target.files);
 }
@@ -79,7 +74,7 @@ function setupUpload() {
 async function upload(files) {
     if (!files || !files.length) return;
     
-    // 1. SHOW THE PROGRESS BAR (This was missing!)
+    // 1. SHOW THE PROGRESS BAR
     const progress = document.getElementById('uploadProgress');
     const status = document.getElementById('uploadStatus');
     
@@ -90,12 +85,20 @@ async function upload(files) {
     
     toast('Starting upload...', 'info');
 
-    let ok = 0;
+    let successCount = 0;
     
     for (let file of files) {
+        // A. Check File Type
         if (!file.name.match(/\.(pdf|docx|doc)$/i)) {
             toast(`Skipped ${file.name} (not a PDF/DOCX)`, 'error');
             continue;
+        }
+
+        // B. Check File Size (Client Side Limit: 10MB)
+        const MAX_SIZE = 10 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+             toast(`Skipped ${file.name}: File too large (Max 10MB)`, 'error');
+             continue;
         }
         
         const form = new FormData();
@@ -108,9 +111,32 @@ async function upload(files) {
                 body: form
             });
             
-            if (res.ok) ok++;
+            if (res.ok) {
+                successCount++;
+                console.log(`Uploaded ${file.name}`);
+            } else {
+                // C. READ SERVER ERROR (Critical Fix)
+                let errorMsg = 'Upload failed';
+                try {
+                    const errorData = await res.json();
+                    errorMsg = errorData.detail || 'Server rejected file';
+                } catch (parseErr) {
+                    errorMsg = `Server Error (${res.status})`;
+                }
+
+                console.error(`Upload failed for ${file.name}:`, errorMsg);
+
+                if (errorMsg.includes("extract text")) {
+                    toast(`❌ ${file.name} is an IMAGE PDF. Please use a text PDF.`, 'error');
+                } else if (errorMsg.includes("too large")) {
+                    toast(`❌ ${file.name} is too large.`, 'error');
+                } else {
+                    toast(`❌ Failed ${file.name}: ${errorMsg}`, 'error');
+                }
+            }
         } catch (e) {
             console.error(e);
+            toast(`Network Error for ${file.name}. Server might be sleeping.`, 'error');
         }
     }
     
@@ -119,18 +145,15 @@ async function upload(files) {
     if (progress) progress.classList.add('hidden');
     
     // 3. SUCCESS MESSAGE & GREETING
-    if (ok > 0) {
-        toast(`${ok} file(s) uploaded successfully!`, 'success');
+    if (successCount > 0) {
+        toast(`${successCount} file(s) uploaded successfully!`, 'success');
         setTimeout(loadFiles, 500);
         
         // ✨ INTERACTIVE: AI Greets you after upload
         if (!sessionId) {
-            await newChat(true); // Start chat but don't clear history yet
+            await newChat(true); 
         }
-        // Send a system message into the chat
-        addMsg(`✅ I have processed ${ok} file(s). You can now ask me questions about them!`, 'ai', true);
-    } else {
-        toast('Upload failed. Please check your connection.', 'error');
+        addMsg(`✅ I have processed ${successCount} file(s). You can now ask me questions about them!`, 'ai', true);
     }
 }
 
@@ -255,7 +278,7 @@ async function loadChatSession(sid) {
         
         const chat = document.getElementById('chat');
         // Reset chat container
-        chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4"></div>';
+        chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
         
         if (data.messages && data.messages.length > 0) {
             data.messages.forEach(m => {
@@ -316,7 +339,7 @@ async function send() {
     
     if (!q) return;
     
-    // Ensure chat container exists (if sending from empty state)
+    // Ensure chat container exists
     const chat = document.getElementById('chat');
     if (!chat.querySelector('.space-y-4')) {
         chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
@@ -355,7 +378,6 @@ async function send() {
         toast('Error getting response', 'error');
     } finally {
         btn.disabled = false;
-        // Keep focus on input for rapid chatting
         setTimeout(() => input.focus(), 100);
     }
 }
@@ -369,14 +391,12 @@ function addMsg(text, type, scroll, sources) {
     const div = document.createElement('div');
     div.className = `flex gap-4 ${type === 'user' ? 'flex-row-reverse' : ''} animate-fade-in`;
     
-    // Avatar
     const avatar = document.createElement('div');
     avatar.className = `w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 shadow-sm ${
         type === 'ai' ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600'
     }`;
     avatar.innerHTML = type === 'ai' ? '🤖' : '👤';
     
-    // Content Bubble
     const content = document.createElement('div');
     content.className = `max-w-[85%] lg:max-w-[75%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
         type === 'ai' 
@@ -386,7 +406,6 @@ function addMsg(text, type, scroll, sources) {
     
     if (type === 'ai') {
         content.innerHTML = formatAI(text);
-        
         if (sources && sources.length) {
             const srcDiv = document.createElement('div');
             srcDiv.className = 'mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap gap-2';
@@ -411,20 +430,17 @@ function addMsg(text, type, scroll, sources) {
 }
 
 function formatAI(text) {
-    // Basic Markdown-ish parsing
     let formatted = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-900 px-1 rounded text-pink-500">$1</code>'); // Code inline
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-900 px-1 rounded text-pink-500">$1</code>');
 
     return formatted.split('\n\n').map(p => {
         p = p.trim();
         if (!p) return '';
-        
         if (p.startsWith('- ') || p.startsWith('• ')) {
             const items = p.split(/\n[-•]\s/).filter(x => x.trim());
             return '<ul class="list-disc ml-4 space-y-1 mb-2">' + items.map(i => `<li>${i.replace(/^[-•]\s/, '')}</li>`).join('') + '</ul>';
         } else if (/^\d+\./.test(p)) {
-            // Try to catch numbered lists
             return `<div class="mb-3">${p.replace(/\n/g, '<br>')}</div>`;
         }
         return `<p class="mb-3 last:mb-0">${p}</p>`;
@@ -471,22 +487,15 @@ function toast(msg, type = 'info') {
     t.textContent = msg;
     t.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-xl text-white z-[60] transform transition-all duration-300 ${colors[type] || colors.info}`;
     
-    // Slight delay to ensure transition works
-    requestAnimationFrame(() => {
-        t.style.transform = 'translateX(0)';
-    });
-    
-    // Hide after 3 seconds
-    setTimeout(() => {
-        t.style.transform = 'translateX(120%)';
-    }, 3000);
+    requestAnimationFrame(() => { t.style.transform = 'translateX(0)'; });
+    setTimeout(() => { t.style.transform = 'translateX(120%)'; }, 3000);
 }
 
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     if (sidebar.classList.contains('-translate-x-full')) {
-        sidebar.classList.remove('-translate-x-full'); // Show
+        sidebar.classList.remove('-translate-x-full');
     } else {
-        sidebar.classList.add('-translate-x-full'); // Hide
+        sidebar.classList.add('-translate-x-full');
     }
 }

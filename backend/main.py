@@ -167,23 +167,22 @@ def health_check():
     }
 
 # âœ… CHANGED: Read user-id from Header
+# FIND THIS FUNCTION IN YOUR CODE AND REPLACE IT
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...), 
     user_id: Optional[str] = Header(None, alias="user-id")
 ):
-    """Upload and process PDF/DOCX file"""
     if not user_id:
         raise HTTPException(400, "User ID header missing")
 
     if not embeddings:
         raise HTTPException(500, "Embeddings not initialized")
     
-    # Validate file type
+    # 1. Validate File Name
     if not file.filename.lower().endswith(('.pdf', '.docx', '.doc')):
         raise HTTPException(400, "Only PDF and DOCX files are supported")
     
-    # âœ… Create user specific folder
     user_dir = os.path.join(UPLOAD_DIR, user_id)
     os.makedirs(user_dir, exist_ok=True)
 
@@ -191,23 +190,28 @@ async def upload_file(
     file_path = os.path.join(user_dir, file_id)
     
     try:
-        # Save uploaded file
+        # 2. READ CONTENT & CHECK SIZE (10MB Limit)
         content = await file.read()
+        
+        if len(content) > 10 * 1024 * 1024: # 10MB Limit
+            raise HTTPException(400, "File is too large (Max 10MB)")
+            
         with open(file_path, "wb") as f:
             f.write(content)
         
-        # Extract text based on file type
+        # 3. EXTRACT TEXT
         if file.filename.lower().endswith('.pdf'):
             text = extract_pdf(file_path)
         else:
             text = extract_docx(file_path)
         
-        # Validate text extraction
-        if not text or len(text.strip()) < 10:
-            os.remove(file_path)
-            raise HTTPException(400, "Could not extract text from file or file is empty")
+        # 4. ROBUST TEXT CHECK (Detects Scanned PDFs)
+        if not text or len(text.strip()) < 50:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(400, "Could not extract text. File might be an image/scanned PDF.")
         
-        # Split text into chunks
+        # 5. PROCESS EMBEDDINGS
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=800,
             chunk_overlap=150,
@@ -215,19 +219,18 @@ async def upload_file(
         )
         chunks = text_splitter.split_text(text)
         
-        # Create metadata for each chunk
+        if not chunks:
+             raise HTTPException(400, "File contains no readable text chunks.")
+
         metadatas = [{"source": file.filename, "file_id": file_id} for _ in chunks]
         
-        print(f"ðŸ“„ Processing {file.filename} for user {user_id}")
-        
-        # âœ… Store in USER SPECIFIC vector store
         if user_id not in user_vector_stores:
             user_vector_stores[user_id] = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
         else:
             new_store = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
             user_vector_stores[user_id].merge_from(new_store)
         
-        # âœ… Store in USER SPECIFIC file list
+        # Update File List
         if user_id not in user_files:
             user_files[user_id] = {}
 
@@ -243,8 +246,7 @@ async def upload_file(
             "message": "File uploaded successfully",
             "filename": file.filename,
             "file_id": file_id,
-            "chunks": len(chunks),
-            "total_files": len(user_files[user_id])
+            "chunks": len(chunks)
         }
         
     except HTTPException:
@@ -468,18 +470,19 @@ def delete_session(session_id: str, user_id: Optional[str] = Header(None, alias=
 
 # âœ… CHANGED: Clear only user's files
 # ✅ UPDATED: Clear BOTH Files and Chat History
+# FIND THIS FUNCTION AT THE BOTTOM AND REPLACE IT
 @app.delete("/clear")
 def clear_all_data(user_id: Optional[str] = Header(None, alias="user-id")):
-    """Clear all uploaded files AND chat history for this user"""
     if not user_id:
         return {"ok": False}
 
-    # 1. Clear Files (Memory & Disk)
+    # Clear Memory
     if user_id in user_vector_stores:
         del user_vector_stores[user_id]
     if user_id in user_files:
         del user_files[user_id]
     
+    # Clear Disk (Files)
     user_dir = os.path.join(UPLOAD_DIR, user_id)
     try:
         if os.path.exists(user_dir):
@@ -488,9 +491,8 @@ def clear_all_data(user_id: Optional[str] = Header(None, alias="user-id")):
     except Exception as e:
         print(f"Error clearing user dir: {e}")
 
-    # 2. Clear Sessions/History (Memory & Disk)
+    # Clear Disk (History) - This was missing in older versions
     if user_id in user_sessions:
-        # Delete each session file from disk
         for sid in list(user_sessions[user_id].keys()):
             path = os.path.join(HISTORY_DIR, f"{sid}.json")
             try:
@@ -499,11 +501,9 @@ def clear_all_data(user_id: Optional[str] = Header(None, alias="user-id")):
             except Exception as e:
                 print(f"Error deleting session {sid}: {e}")
         
-        # Clear dictionary
         del user_sessions[user_id]
     
     return {"message": "All data cleared", "ok": True}
-
 # For Render deployment
 if __name__ == "__main__":
     import uvicorn
