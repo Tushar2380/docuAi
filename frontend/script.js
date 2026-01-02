@@ -184,16 +184,33 @@ async function delFile(fid) {
 }
 
 async function clearAll() {
-    if (!confirm('Clear all files? This cannot be undone.')) return;
+    if (!confirm('Clear EVERYTHING (Files & Chat History)? This cannot be undone.')) return;
+    
     try {
         await fetch(`${API}/clear`, {
             method: 'DELETE',
             headers: { 'user-id': getUserId() }
         });
-        toast('All files cleared', 'success');
+        
+        toast('All data cleared', 'success');
+        
+        // 1. Reset Session
+        sessionId = null;
+        localStorage.removeItem('docuchat_session');
+        updateBadge();
+        
+        // 2. Refresh Lists (They will now be empty)
         loadFiles();
+        loadHistory(); 
+        
+        // 3. Reset Chat Screen
+        document.getElementById('chat').innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
+        
+        // 4. Start a fresh "Welcome" chat
+        newChat(true); 
+
     } catch (e) {
-        toast('Error', 'error');
+        toast('Error clearing data', 'error');
     }
 }
 

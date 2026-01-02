@@ -467,19 +467,19 @@ def delete_session(session_id: str, user_id: Optional[str] = Header(None, alias=
     return {"message": "Session deleted", "ok": True}
 
 # âœ… CHANGED: Clear only user's files
+# ✅ UPDATED: Clear BOTH Files and Chat History
 @app.delete("/clear")
-def clear_all_files(user_id: Optional[str] = Header(None, alias="user-id")):
-    """Clear all uploaded files for this user"""
+def clear_all_data(user_id: Optional[str] = Header(None, alias="user-id")):
+    """Clear all uploaded files AND chat history for this user"""
     if not user_id:
         return {"ok": False}
 
-    # Clear memory
+    # 1. Clear Files (Memory & Disk)
     if user_id in user_vector_stores:
         del user_vector_stores[user_id]
     if user_id in user_files:
         del user_files[user_id]
     
-    # Clear disk
     user_dir = os.path.join(UPLOAD_DIR, user_id)
     try:
         if os.path.exists(user_dir):
@@ -487,8 +487,22 @@ def clear_all_files(user_id: Optional[str] = Header(None, alias="user-id")):
             os.makedirs(user_dir, exist_ok=True)
     except Exception as e:
         print(f"Error clearing user dir: {e}")
+
+    # 2. Clear Sessions/History (Memory & Disk)
+    if user_id in user_sessions:
+        # Delete each session file from disk
+        for sid in list(user_sessions[user_id].keys()):
+            path = os.path.join(HISTORY_DIR, f"{sid}.json")
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception as e:
+                print(f"Error deleting session {sid}: {e}")
+        
+        # Clear dictionary
+        del user_sessions[user_id]
     
-    return {"message": "All files cleared", "ok": True}
+    return {"message": "All data cleared", "ok": True}
 
 # For Render deployment
 if __name__ == "__main__":
