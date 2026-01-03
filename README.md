@@ -5,7 +5,7 @@ DocuAI is an AI-based web application that allows users to upload documents (PDF
 The system processes documents, stores semantic embeddings in a vector database, and uses a Large Language Model (LLM) to generate accurate, context-aware answers.
 
 
-🚀 Features
+🚀 Features:
 
 📂 Upload PDF and DOCX documents
 🔍 Automatic text extraction from documents
@@ -16,7 +16,7 @@ The system processes documents, stores semantic embeddings in a vector database,
 🌐 Deployed backend and frontend
 🧩 Simple and user-friendly interface
 
-🛠️ Tech Stack
+🛠️ Tech Stack:
 
 Backend
 Python
@@ -35,7 +35,7 @@ Backend: Render
 Frontend: Vercel
 
 
-⚙️ System Architecture (Workflow)
+⚙️ System Architecture (Workflow):
 
 User uploads a document                          
 Text is extracted from the document
@@ -62,21 +62,21 @@ docuAi/
 │
 └── README.md
 
-📌 Future Enhancements
+📌 Future Enhancements:
 Support for multiple documents simultaneously
 User authentication
 Improved UI/UX
 Multi-language document support
 Advanced chat memory optimization
 
-👤 Author
+👤 Author:
 Tushar Wangari
 Second-Year IT Engineering Student
 
 🔗 GitHub: https://github.com/Tushar2380
 🔗 LinkedIn: https://www.linkedin.com/in/tushar-wangari-a940b232a
 
-⭐ Acknowledgements
+⭐ Acknowledgements:
 LangChain
 HuggingFace
 FAISS
