@@ -89,9 +89,9 @@
                     <div class="text-center">
                         <div class="text-6xl mb-4">💬</div>
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Welcome to DocuChat AI</h2>
-                        <p class="text-gray-600 dark:text-gray-400 mb-4">Upload documents and start asking questions</p>
+                        <p class="text-gray-600 dark:text-gray-400 mb-4">Upload documents, images, or PDFs and start asking questions</p>
                         <button onclick="document.getElementById('fileInput').click()" class="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium">
-                            📤 Upload Documents
+                            📤 Upload Documents or Images
                         </button>
                     </div>
                 </div>
@@ -113,7 +113,7 @@
                         <button 
                             onclick="document.getElementById('fileInput').click()"
                             class="p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            title="Upload PDF or DOCX"
+                            title="Upload PDF, DOCX, or Images"
                         >
                             <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -123,7 +123,7 @@
                         <input 
                             type="text" 
                             id="input" 
-                            placeholder="Ask about your documents..."
+                            placeholder="Ask about your documents or images..."
                             class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 outline-none transition-all"
                             onkeypress="if(event.key==='Enter') send()"
                         >
@@ -140,8 +140,8 @@
         </main>
     </div>
 
-    <!-- Hidden File Input -->
-    <input type="file" id="fileInput" accept=".pdf,.docx,.doc" multiple class="hidden">
+    <!-- Hidden File Input - Now accepts images too -->
+    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" multiple class="hidden">
 
     <!-- Toast -->
     <div id="toast" class="fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white transform translate-x-full transition-transform duration-300 z-50"></div>

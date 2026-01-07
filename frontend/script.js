@@ -26,7 +26,7 @@ function loadSession() {
 
 function updateBadge() {
     const badge = document.getElementById('badge');
-    if (!badge) return; // Safety check
+    if (!badge) return;
     
     badge.textContent = sessionId ? 'Online' : 'Ready';
     badge.className = sessionId 
@@ -43,7 +43,6 @@ window.onload = () => {
     setupUpload();
     updateBadge();
     
-    // Check if we are in a fresh state and welcome the user
     if (!sessionId) {
         updateBadge();
     }
@@ -65,7 +64,19 @@ function toggleTheme() {
     }
 }
 
-// --- UPLOAD LOGIC (ROBUST VERSION) ---
+// --- HELPER: Check if file is image ---
+function isImageFile(filename) {
+    return filename.match(/\.(png|jpg|jpeg|gif|bmp|tiff|webp)$/i);
+}
+
+// --- HELPER: Get file emoji ---
+function getFileEmoji(filename, fileType) {
+    if (fileType === 'image' || isImageFile(filename)) return '🖼️';
+    if (filename.endsWith('.pdf')) return '📄';
+    return '📝';
+}
+
+// --- UPLOAD LOGIC (ROBUST VERSION WITH IMAGE SUPPORT) ---
 function setupUpload() {
     const input = document.getElementById('fileInput');
     input.onchange = (e) => upload(e.target.files);
@@ -74,7 +85,6 @@ function setupUpload() {
 async function upload(files) {
     if (!files || !files.length) return;
     
-    // 1. SHOW THE PROGRESS BAR
     const progress = document.getElementById('uploadProgress');
     const status = document.getElementById('uploadStatus');
     
@@ -88,17 +98,20 @@ async function upload(files) {
     let successCount = 0;
     
     for (let file of files) {
-        // A. Check File Type
-        if (!file.name.match(/\.(pdf|docx|doc)$/i)) {
-            toast(`Skipped ${file.name} (not a PDF/DOCX)`, 'error');
+        // Check file type (now includes images)
+        const isImage = isImageFile(file.name);
+        const isDoc = file.name.match(/\.(pdf|docx|doc)$/i);
+        
+        if (!isImage && !isDoc) {
+            toast(`Skipped ${file.name} (not a supported file type)`, 'error');
             continue;
         }
 
-        // B. Check File Size (Client Side Limit: 10MB)
+        // Check file size (10MB limit)
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
-             toast(`Skipped ${file.name}: File too large (Max 10MB)`, 'error');
-             continue;
+            toast(`Skipped ${file.name}: File too large (Max 10MB)`, 'error');
+            continue;
         }
         
         const form = new FormData();
@@ -115,7 +128,6 @@ async function upload(files) {
                 successCount++;
                 console.log(`Uploaded ${file.name}`);
             } else {
-                // C. READ SERVER ERROR (Critical Fix)
                 let errorMsg = 'Upload failed';
                 try {
                     const errorData = await res.json();
@@ -127,9 +139,15 @@ async function upload(files) {
                 console.error(`Upload failed for ${file.name}:`, errorMsg);
 
                 if (errorMsg.includes("extract text")) {
-                    toast(`❌ ${file.name} is an IMAGE PDF. Please use a text PDF.`, 'error');
+                    if (isImage) {
+                        toast(`❌ ${file.name}: No readable text found in image.`, 'error');
+                    } else {
+                        toast(`❌ ${file.name} is a scanned PDF. Please use a text PDF.`, 'error');
+                    }
                 } else if (errorMsg.includes("too large")) {
                     toast(`❌ ${file.name} is too large.`, 'error');
+                } else if (errorMsg.includes("blank") || errorMsg.includes("not readable")) {
+                    toast(`❌ ${file.name}: Image appears blank or text is not readable.`, 'error');
                 } else {
                     toast(`❌ Failed ${file.name}: ${errorMsg}`, 'error');
                 }
@@ -140,16 +158,15 @@ async function upload(files) {
         }
     }
     
-    // 2. RESET INPUT & HIDE PROGRESS
+    // Reset input & hide progress
     document.getElementById('fileInput').value = '';
     if (progress) progress.classList.add('hidden');
     
-    // 3. SUCCESS MESSAGE & GREETING
+    // Success message
     if (successCount > 0) {
         toast(`${successCount} file(s) uploaded successfully!`, 'success');
         setTimeout(loadFiles, 500);
         
-        // ✨ INTERACTIVE: AI Greets you after upload
         if (!sessionId) {
             await newChat(true); 
         }
@@ -174,7 +191,7 @@ async function loadFiles() {
             list.innerHTML = data.files.map(f => `
                 <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg group">
                     <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-lg">${f.filename.endsWith('.pdf') ? '📄' : '📝'}</span>
+                        <span class="text-lg">${getFileEmoji(f.filename, f.file_type)}</span>
                         <span class="text-sm text-gray-700 dark:text-gray-300 truncate">${f.filename}</span>
                     </div>
                     <button onclick="delFile('${f.file_id}')" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -217,19 +234,15 @@ async function clearAll() {
         
         toast('All data cleared', 'success');
         
-        // 1. Reset Session
         sessionId = null;
         localStorage.removeItem('docuchat_session');
         updateBadge();
         
-        // 2. Refresh Lists (They will now be empty)
         loadFiles();
         loadHistory(); 
         
-        // 3. Reset Chat Screen
         document.getElementById('chat').innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
         
-        // 4. Start a fresh "Welcome" chat
         newChat(true); 
 
     } catch (e) {
@@ -277,7 +290,6 @@ async function loadChatSession(sid) {
         updateBadge();
         
         const chat = document.getElementById('chat');
-        // Reset chat container
         chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
         
         if (data.messages && data.messages.length > 0) {
@@ -289,7 +301,6 @@ async function loadChatSession(sid) {
         chat.scrollTop = chat.scrollHeight;
         loadHistory();
         
-        // Mobile: auto-close sidebar on select
         if (window.innerWidth < 1024) {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.add('-translate-x-full');
@@ -313,18 +324,15 @@ async function newChat(silent = false) {
         updateBadge();
         
         const chat = document.getElementById('chat');
-        // Clear the "Welcome" screen and prepare for messages
         chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
         
         if (!silent) {
-            // ✨ INTERACTIVE: Immediate Greeting
-            addMsg("Hello! 👋 I am your Document Assistant.\n\nUpload a PDF or DOCX file, and I can summarize it or answer your questions.", 'ai', false);
+            addMsg("Hello! 👋 I am your Document Assistant.\n\nUpload a PDF, DOCX, or image file, and I can summarize it or answer your questions.", 'ai', false);
         }
         
         loadHistory();
         if (!silent) toast('New chat started', 'success');
         
-        // Mobile: close sidebar
         if (window.innerWidth < 1024) {
             document.getElementById('sidebar').classList.add('-translate-x-full');
         }
@@ -339,7 +347,6 @@ async function send() {
     
     if (!q) return;
     
-    // Ensure chat container exists
     const chat = document.getElementById('chat');
     if (!chat.querySelector('.space-y-4')) {
         chat.innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
@@ -410,7 +417,8 @@ function addMsg(text, type, scroll, sources) {
             const srcDiv = document.createElement('div');
             srcDiv.className = 'mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap gap-2';
             sources.forEach(s => {
-                srcDiv.innerHTML += `<span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400">📄 ${s}</span>`;
+                const emoji = getFileEmoji(s, null);
+                srcDiv.innerHTML += `<span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400">${emoji} ${s}</span>`;
             });
             content.appendChild(srcDiv);
         }
