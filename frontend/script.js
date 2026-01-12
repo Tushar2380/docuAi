@@ -73,6 +73,7 @@ function isImageFile(filename) {
 function getFileEmoji(filename, fileType) {
     if (fileType === 'image' || isImageFile(filename)) return '🖼️';
     if (filename.endsWith('.pdf')) return '📄';
+    if (filename.match(/\.(ppt|pptx)$/i)) return '📊'; // <--- Added PPT icon
     return '📝';
 }
 
@@ -100,7 +101,7 @@ async function upload(files) {
     for (let file of files) {
         // Check file type (now includes images)
         const isImage = isImageFile(file.name);
-        const isDoc = file.name.match(/\.(pdf|docx|doc)$/i);
+        const isDoc = file.name.match(/\.(pdf|docx|doc|ppt|pptx)$/i); // <--- Added ppt/pptx
         
         if (!isImage && !isDoc) {
             toast(`Skipped ${file.name} (not a supported file type)`, 'error');

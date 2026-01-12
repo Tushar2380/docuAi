@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from pypdf import PdfReader
 from dotenv import load_dotenv
 import docx
+from pptx import Presentation
 import requests
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -94,6 +95,20 @@ def extract_docx(path: str) -> str:
         print(f"DOCX extraction error: {e}")
         return ""
 
+def extract_pptx(path: str) -> str:
+    """Extract text from PowerPoint file"""
+    try:
+        prs = Presentation(path)
+        text = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text.append(shape.text)
+        return "\n".join(text)
+    except Exception as e:
+        print(f"PPTX extraction error: {e}")
+        return ""
+    
 def analyze_image_with_vision_ai(file_content: bytes, filename: str) -> str:
     """Analyze image using Groq Vision API (llama-3.2-90b-vision-preview)"""
     try:
@@ -333,10 +348,12 @@ async def upload_file(
         raise HTTPException(500, "Embeddings not initialized")
     
     is_image = is_image_file(file.filename)
-    is_document = file.filename.lower().endswith(('.pdf', '.docx', '.doc'))
+    is_pdf = file.filename.lower().endswith('.pdf')
+    is_docx = file.filename.lower().endswith(('.docx', '.doc'))
+    is_pptx = file.filename.lower().endswith(('.pptx', '.ppt'))  # <--- Added PPT check
     
-    if not (is_image or is_document):
-        raise HTTPException(400, "Only PDF, DOCX, and Image files (PNG, JPG, JPEG, GIF, BMP, TIFF, WEBP) are supported")
+    if not (is_image or is_pdf or is_docx or is_pptx):
+        raise HTTPException(400, "Unsupported file type. Use PDF, DOCX, PPTX, or Images.")
     
     user_dir = os.path.join(UPLOAD_DIR, user_id)
     os.makedirs(user_dir, exist_ok=True)
@@ -364,10 +381,12 @@ async def upload_file(
                     os.remove(file_path)
                 raise HTTPException(400, "Could not analyze image. Image might be corrupted, too low quality, or processing failed.")
         
-        elif file.filename.lower().endswith('.pdf'):
+        elif is_pdf:
             text = extract_pdf(file_path)
-        else:
+        elif is_docx:
             text = extract_docx(file_path)
+        elif is_pptx:
+            text = extract_pptx(file_path) # <--- Added PPT extraction
         
         if not text or len(text.strip()) < 50:
             if os.path.exists(file_path):
