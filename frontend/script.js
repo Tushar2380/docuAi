@@ -263,16 +263,71 @@ async function loadHistory() {
         
         if (data.sessions && data.sessions.length > 0) {
             list.innerHTML = data.sessions.map(s => `
-                <button onclick="loadChatSession('${s.id}')" class="w-full text-left p-3 rounded-lg text-sm transition-colors ${s.id === sessionId ? 'bg-primary/10 text-primary font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}">
-                    <div class="truncate">${s.title || 'New Chat'}</div>
-                    <div class="text-[10px] opacity-60 mt-1">${s.created || ''}</div>
-                </button>
+                <div class="group relative flex items-center">
+                    <button onclick="loadChatSession('${s.id}')" class="w-full text-left p-3 pr-8 rounded-lg text-sm transition-colors ${s.id === sessionId ? 'bg-primary/10 text-primary font-medium' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                        <div class="truncate">${s.title || 'New Chat'}</div>
+                        <div class="text-[10px] opacity-60 mt-1">${s.created || ''}</div>
+                    </button>
+                    <button onclick="deleteSession('${s.id}', event)" class="absolute right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all" title="Delete Chat">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
             `).join('');
         } else {
             list.innerHTML = '<div class="text-center py-4 text-xs text-gray-400 italic">No history</div>';
         }
     } catch (e) {
         console.error(e);
+    }
+}
+
+async function deleteSession(sid, event) {
+    if (event) event.stopPropagation();
+    if (!confirm('Delete this chat history?')) return;
+
+    try {
+        const res = await fetch(`${API}/sessions/${sid}`, {
+            method: 'DELETE',
+            headers: { 'user-id': getUserId() }
+        });
+        
+        if (res.ok) {
+            toast('Chat deleted', 'success');
+            
+            // If we deleted the current session, start a new one
+            if (sid === sessionId) {
+                sessionId = null;
+                localStorage.removeItem('docuchat_session');
+                await newChat(true);
+            } else {
+                loadHistory();
+            }
+        }
+    } catch (e) {
+        toast('Error deleting chat', 'error');
+    }
+}
+
+async function clearCurrentChat() {
+    if (!sessionId) return;
+    if (!confirm('Clear all messages in this chat?')) return;
+    
+    try {
+        const res = await fetch(`${API}/sessions/${sessionId}/clear`, {
+            method: 'POST',
+            headers: { 'user-id': getUserId() }
+        });
+        
+        if (res.ok) {
+            toast('Chat cleared', 'success');
+            // Clear UI immediately
+            document.getElementById('chat').innerHTML = '<div class="max-w-4xl mx-auto space-y-4 pt-4"></div>';
+            loadHistory(); // Refresh title
+        }
+    } catch (e) {
+        toast('Error clearing chat', 'error');
     }
 }
 

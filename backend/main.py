@@ -600,6 +600,15 @@ def create_new_session(request: QuestionRequest):
         "message": "New session created"
     }
 
+@app.post("/sessions/{session_id}/clear")
+def clear_session_messages(session_id: str, user_id: Optional[str] = Header(None, alias="user-id")):
+    """Clear messages from a specific session but keep the session"""
+    if user_id in user_sessions and session_id in user_sessions[user_id]:
+        user_sessions[user_id][session_id]["messages"] = []
+        save_session(user_id, session_id)
+        return {"message": "Chat cleared", "ok": True}
+    return {"message": "Session not found", "ok": False}
+
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: str, user_id: Optional[str] = Header(None, alias="user-id")):
     """Delete a chat session"""

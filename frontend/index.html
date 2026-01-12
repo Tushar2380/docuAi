@@ -21,10 +21,8 @@
 </head>
 <body class="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 transition-colors">
     <div class="flex h-full">
-        <!-- Sidebar -->
         <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
             <div class="flex flex-col h-full">
-                <!-- Header -->
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between mb-4">
                         <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
@@ -46,15 +44,12 @@
                     </button>
                 </div>
 
-                <!-- Scrollable Content -->
                 <div class="flex-1 overflow-y-auto p-4 space-y-6">
-                    <!-- History -->
                     <div>
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Chat History</h3>
                         <div id="historyList" class="space-y-2 max-h-64 overflow-y-auto"></div>
                     </div>
 
-                    <!-- Files -->
                     <div>
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                             Documents (<span id="fileCount">0</span>)
@@ -68,9 +63,7 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="flex-1 flex flex-col lg:ml-80">
-            <!-- Header -->
             <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 flex items-center gap-4">
                 <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,12 +71,17 @@
                     </svg>
                 </button>
                 <h2 class="text-xl font-semibold text-gray-800 dark:text-white">AI Assistant</h2>
-                <div id="badge" class="ml-auto px-3 py-1 text-xs font-medium rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                    Ready
+                
+                <div class="ml-auto flex items-center gap-3">
+                    <button onclick="clearCurrentChat()" class="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Clear current messages">
+                        🧹 Clear Chat
+                    </button>
+                    <div id="badge" class="px-3 py-1 text-xs font-medium rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                        Ready
+                    </div>
                 </div>
             </header>
 
-            <!-- Chat Messages -->
             <div id="chat" class="flex-1 overflow-y-auto p-4 lg:p-6">
                 <div class="max-w-4xl mx-auto h-full flex items-center justify-center">
                     <div class="text-center">
@@ -97,10 +95,8 @@
                 </div>
             </div>
 
-            <!-- Input Area with Upload Button -->
             <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                 <div class="max-w-4xl mx-auto">
-                    <!-- Upload Progress -->
                     <div id="uploadProgress" class="hidden mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div class="flex items-center gap-3">
                             <div class="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"></div>
@@ -109,7 +105,6 @@
                     </div>
                     
                     <div class="flex gap-3">
-                        <!-- Upload Button -->
                         <button 
                             onclick="document.getElementById('fileInput').click()"
                             class="p-3 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -140,10 +135,8 @@
         </main>
     </div>
 
-    <!-- Hidden File Input - Now accepts images too -->
     <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" multiple class="hidden">
 
-    <!-- Toast -->
     <div id="toast" class="fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white transform translate-x-full transition-transform duration-300 z-50"></div>
 
     <script src="script.js"></script>
